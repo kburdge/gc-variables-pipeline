@@ -1,100 +1,65 @@
 # JWST Globular Cluster Variable Star Pipeline
 
-Production pipeline for detecting and characterizing variable stars in globular clusters using JWST NIRCam time-series photometry. Primary targets: **Liller 1** and **Terzan 5**, observed in F200W (SW) and F356W (LW).
+Production pipeline code for JWST NIRCam time-series photometry of globular clusters (Liller 1, Terzan 5). Scripts are added to this repository one-by-one as they are documented in the accompanying paper.
 
-## Pipeline Overview
+**Paper repo:** [kburdge/gc-variables-paper](https://github.com/kburdge/gc-variables-paper)
 
-```
-Observations (uncal/ramp/calints)
-        |
-        v
-[ramp_pipeline.py] -- group-diff cubes, autocorr detection, aperture photometry, period search
-        |
-        v
-[generate_diagnostics.py] -- multi-panel PNGs for user sorting (REAL/FAKE)
-        |
-        v
-[build_real_catalog.py] -- HDF5 catalog from user-sorted sources
-        |
-        v
-[rebuild_master_catalog.py] -- master catalog with refined centroids
-        |
-        v
-[build_corrected_catalog.py] -- saturation correction, slope correction, best-stage selection
-        |
-        v
-[run_period_search.py] -- LS + BLS on corrected lightcurves
-        |
-        v
-[catalog_server.py] -- web viewer (Aladin Lite + lightcurve display)
-```
+## Astrometry (Appendix A)
 
-## Astrometry
+Two-stage absolute astrometry pipeline tying NIRCam positions to the Gaia DR3 reference frame.
 
-Two-stage absolute astrometry pipeline:
+### Scripts
 
-1. **LW to Gaia DR3** (`calibrate_lw_astrometry.py`): Aligns nrcblong to Gaia using adaptive FWHM detection with best-roundness selection. Achieves 1-2 mas uncertainty on the absolute frame.
+| Script | Purpose | Paper section |
+|--------|---------|---------------|
+| `calibrate_lw_astrometry.py` | LW (nrcblong) to Gaia DR3 alignment | Appendix A.1 |
+| `calibrate_sw_astrometry_lw.py` | SW (nrcb1-4) to LW cross-match alignment | Appendix A.2 |
+| `build_lw_match_table.py` | Build FITS match table for TOPCAT inspection | Appendix A.1 |
+| `run_astrometry_pipeline.sh` | Run full astrometry chain for both targets | Appendix A |
 
-2. **SW to LW** (`calibrate_sw_astrometry_lw.py`): Cross-matches SW detectors to the Gaia-corrected LW frame. 300-600 reference sources per detector, 2.5-6 mas median residuals.
+### Method
 
-3. **Centroid refinement** (`refine_centroids.py`): 2D Gaussian fitting on autocorrelation images for sub-pixel precision (~0.1 px = 3 mas).
+**Stage 1: LW to Gaia** (`calibrate_lw_astrometry.py`)
+- Detect sources in uncal ZF median with DAOStarFinder across a grid of FWHM values (4-30 px)
+- For each Gaia source, select the FWHM giving the best (smallest |roundness1|) match
+- Filter to |roundness1| < 0.1, IQR clip residuals, compute median shift
+- Apply as rigid CRVAL correction preserving JWST SIP distortion
+- Terzan 5: 97 matches (G < 17.5), 2.2 mas uncertainty, 12 mas median residual
+- Liller 1: 45-46 matches (G < 18), 1.1 mas uncertainty, 5-6 mas median residual
 
-Run the full astrometry pipeline:
+**Stage 2: SW to LW** (`calibrate_sw_astrometry_lw.py`)
+- Cross-match SW and LW zero-frame detections within 0.2"
+- 289-631 references per detector, 2.5-6 mas median residuals
+- Median shift applied as CRVAL correction
+
+### Usage
+
 ```bash
+# Full pipeline (both targets)
 bash analysis/run_astrometry_pipeline.sh
+
+# Individual targets
+python analysis/calibrate_lw_astrometry.py --target Terzan5
+python analysis/calibrate_lw_astrometry.py --target Liller1
+python analysis/calibrate_sw_astrometry_lw.py --target Terzan5
+python analysis/calibrate_sw_astrometry_lw.py --target Liller1
+
+# Build TOPCAT match table for inspection
+python analysis/build_lw_match_table.py --target Terzan5 --seg Segment2
 ```
 
-## Directory Structure
+### Systematic Error Budget
 
-```
-core/
-  ramp_pipeline.py        # Main pipeline: cube creation, detection, photometry, period search
-  jwst_utils.py           # Shared utilities: DAOStarFinder, aperture photometry, WCS
-  source_tracker.py       # Per-source debug tracing
+| Component | Uncertainty |
+|-----------|------------|
+| Gaia frame tie (LW) | 1-2 mas |
+| LW-to-SW transfer | ~0.2 mas |
+| Centroid precision | ~3 mas |
+| **Total (quadrature)** | **3.2-3.5 mas** |
 
-analysis/
-  # Astrometry
-  calibrate_lw_astrometry.py      # LW -> Gaia DR3 (production, DO NOT DELETE)
-  calibrate_sw_astrometry_lw.py   # SW -> LW cross-match (production, DO NOT DELETE)
-  build_lw_match_table.py         # FITS match table for TOPCAT inspection
-  refine_centroids.py             # Gaussian centroid refinement
-  run_astrometry_pipeline.sh      # Full astrometry runner
-
-  # Catalog building
-  rebuild_master_catalog.py       # Master catalog with refined positions
-  build_corrected_catalog.py      # Sat/slope corrections + best-stage
-  build_real_catalog.py           # Catalog from user-sorted diagnostics
-  build_catalog_v3.py             # Catalog from extraction HDF5 (v3)
-
-  # Diagnostics & viewer
-  generate_diagnostics.py         # Multi-panel diagnostic PNGs
-  catalog_server.py               # Web viewer (port 8085)
-  static/index.html               # Viewer frontend (Aladin Lite)
-
-  # Period search
-  run_period_search.py            # LS + BLS on best-stage lightcurves
-  combined_period_search.py       # Combined S3+S4 coherent period search
-
-  # Special
-  add_special_reduction.py        # PSF-wing extractions (e.g., rapid burster)
-  sw_lw_crossmatch.py             # SW-LW diagnostic cross-match
-
-framework/
-  pipeline.py             # Pipeline orchestration class
-  config.py               # YAML config management
-```
-
-## Key Data Products
-
-- `catalogs/master_variable_catalog.h5` -- Master catalog with positions, lightcurves, corrections
-- `catalogs/master_source_mapping.json` -- Source ID to detection filename mapping
-- `astrometry/*_wcs_gaia.fits` -- Gaia-corrected LW WCS
-- `astrometry/*_wcs_lw.fits` -- LW-aligned SW WCS
-- `refs/*_autocorr.fits` -- Autocorrelation reference images
-- `extraction/{target}/{seg}/{det}_{mode}.h5` -- Pipeline extraction HDF5
+Validated by PSR J1748-2446A: JWST RA agrees with radio timing to 0.3 mas.
 
 ## Environment
 
 - Python 3.12 (miniconda3)
 - Key packages: astropy, photutils, numpy, scipy, matplotlib, h5py
-- 125 GB RAM, JWST data at `/data/JWST/`
