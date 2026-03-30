@@ -2,3 +2,18 @@ __pycache__/
 *.pyc
 .DS_Store
 *.egg-info/
+
+# Unverified scripts — kept on disk but not tracked until documented in paper
+analysis/rebuild_master_catalog.py
+analysis/refine_centroids.py
+analysis/build_real_catalog.py
+analysis/generate_diagnostics.py
+analysis/add_special_reduction.py
+analysis/run_period_search.py
+analysis/combined_period_search.py
+analysis/build_mosaics.py
+analysis/build_catalog_v3.py
+analysis/sw_lw_crossmatch.py
+analysis/build_corrected_catalog.py
+analysis/catalog_server.py
+analysis/static/
