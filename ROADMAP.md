@@ -38,8 +38,14 @@ shipped vetting labels, Zenodo data products). Tracking the porting work here.
 - ✅ `pipeline/catalog.write_source_table` + `scripts/04_build_catalog.py` — per-target `sources` tables
 - ✅ Read **shipped vetting labels** instead of scanning local REAL/FAKE folders
 - ✅ `refine_centroid` ported (for the LC stage)
-- ⬜ Lightcurve population: pixel positions from extraction → centroid refine → forced photometry on cubes → RA/Dec via LW WCS → fill `sources` pixel fields + `lightcurves/{seg}/{mode}/{det}`
+- ✅ Ground-truth pixels baked into shipped labels (`export_vetting_labels.py` writes px,py)
+- ✅ Lightcurve population (`pipeline.catalog.populate_lightcurves`, `04_build_catalog --with-lightcurves`):
+      primary-detection pick → centroid refine → forced photometry (same/cross-detector WCS) →
+      double IQR clip → RA/Dec → fills `sources` pixel fields + `lightcurves/{seg}/{mode}/{det}`.
+      **Validated on Terzan 5: 11/12 sky-matched lightcurves reproduce the published catalog at corr = 1.000**
+      (the 12th is a new source with no published counterpart).
 - ⬜ Saturation + slope corrections + `best_stage` table (port build_corrected_catalog.py; needs uncal)
+- ⬜ Full Liller 1 run (heavier: 4 segments) + web-viewer port
 - ⬜ Determinism check: rebuilt catalog == published catalog (note: current folders → 1,362 vs published 1,315; folders grew ~47 since last build)
 
 ### Demo subset

@@ -16,6 +16,7 @@ crds:
 paths:
   data_root: ./data/jwst           # uncal / ramp / calints per target/segment
   refs_dir:  ./data/refs           # group-diff cubes, autocorr + WCS references
+  astrometry_dir: ./data/astrometry  # LW-aligned WCS (LW->Gaia, SW->LW)
   extraction_dir: ./data/extraction
   catalogs_dir:   ./data/catalogs
   diagnostics_dir: ./data/diagnostics

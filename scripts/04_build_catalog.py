@@ -28,6 +28,9 @@ def main():
     ap.add_argument("--config", default="config/pipeline.yaml")
     ap.add_argument("--labels", default="vetting_labels.csv", help="shipped vetting-label CSV")
     ap.add_argument("--out", help="output catalog HDF5 (default: <catalogs_dir>/master_variable_catalog.h5)")
+    ap.add_argument("--with-lightcurves", action="store_true",
+                    help="also populate centroids + lightcurves (needs cubes, autocorr, WCS)")
+    ap.add_argument("--target", action="append", help="restrict to target(s); repeatable")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -37,11 +40,17 @@ def main():
     labels = load_labels(args.labels)
     print(f"Loaded {len(labels)} REAL detection labels")
     master = build_mapping(labels, dedup_arcsec=cfg["catalog"]["dedup_radius_arcsec"])
-    counts = write_source_table(master, out)
-    total = sum(counts.values())
-    print(f"\nUnique objects: {total}  " + "  ".join(f"{k}={v}" for k, v in counts.items()))
-    print(f"Wrote source tables to {out}")
-    print("(lightcurve population + corrections: stages still being ported — see ROADMAP.md)")
+    targets = tuple(args.target) if args.target else ("Liller1", "Terzan5")
+
+    if args.with_lightcurves:
+        from pipeline.catalog import populate_lightcurves
+        populate_lightcurves(cfg, master, out, targets=targets)
+    else:
+        counts = write_source_table(master, out, targets=targets)
+        total = sum(counts.values())
+        print(f"\nUnique objects: {total}  " + "  ".join(f"{k}={v}" for k, v in counts.items()))
+        print(f"Wrote source tables to {out}")
+        print("(run with --with-lightcurves to also populate centroids + lightcurves)")
 
 
 if __name__ == "__main__":

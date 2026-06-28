@@ -53,10 +53,18 @@ ra, dec, snr, ...). `pipeline/catalog.build_mapping` then deduplicates those
 detections across all folders at 0.2" (SNR-ordered single-link) into unique
 objects with a `master_id`, and `write_source_table` writes the per-target
 `sources` compound table. Validated byte-for-byte against the original
-`build_master_mapping.py` (identical counts on the same folders). The lightcurve
-population (centroid refine + forced photometry + RA/Dec via LW WCS) and the
-sat/slope corrections are the next port stages; `refine_centroid` is already
-ported in `catalog.py`.
+`build_master_mapping.py` (identical counts on the same folders).
+
+Lightcurve population (`populate_lightcurves`, `04_build_catalog --with-lightcurves`)
+picks each object's primary detection, refines its centroid (2D Gaussian on the
+autocorr image), does forced aperture photometry on every available cube
+(same-detector direct; cross-detector/segment via the LW-aligned WCS),
+double-IQR-clips, sets RA/Dec from the refined pixel, and fills the `sources`
+pixel fields + `lightcurves/{seg}/{mode}/{det}`. The shipped labels carry
+ground-truth px,py so this is decoupled from re-extraction. Validated on
+Terzan 5: matched lightcurves reproduce the published catalog at corr = 1.000.
+The sat/slope corrections (`build_corrected_catalog.py`) are the remaining
+downstream port.
 
 **Count note:** the deduplication currently yields 1,362 objects (939 Liller 1,
 423 Terzan 5) from the present REAL folders — vs the published 1,315; the folders
