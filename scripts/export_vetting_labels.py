@@ -48,7 +48,43 @@ FNAME_RE = re.compile(
 )
 
 COLUMNS = ["target", "segment", "mode", "channel", "detector", "src_id",
-           "ra", "dec", "snr", "period_min", "ls_sig", "amplitude", "folder", "filename"]
+           "ra", "dec", "px", "py", "snr", "period_min", "ls_sig", "amplitude", "folder", "filename"]
+
+
+def _load_extraction_sources(extraction_dir):
+    """Load each extraction HDF5's source table, keyed by (target,seg,det,mode)."""
+    import glob
+    import h5py
+    ext = {}
+    for path in glob.glob(os.path.join(extraction_dir, "*", "*", "*_ramp.h5")) + \
+                glob.glob(os.path.join(extraction_dir, "*", "*", "*_zf.h5")):
+        parts = path.split(os.sep)
+        target, seg = parts[-3], parts[-2]
+        det, mode = os.path.basename(path).replace(".h5", "").rsplit("_", 1)
+        try:
+            with h5py.File(path, "r") as f:
+                ext[(target, seg, det, mode)] = f["sources"][:]
+        except Exception:
+            pass
+    return ext
+
+
+def _match_pixel(ext_sources, ra, dec, ls_sig):
+    """Match a label to its extraction source by nearest ra/dec (+LS tiebreak); return (px,py)."""
+    import numpy as np
+    if ext_sources is None or len(ext_sources) == 0:
+        return np.nan, np.nan
+    dist = np.hypot(ext_sources["ra"] - ra, ext_sources["dec"] - dec)
+    cand = np.where(dist < 0.001)[0]
+    if len(cand) == 0:
+        cand = [int(np.argmin(dist))]
+    best = cand[0]
+    lsf = "ls_significance" if "ls_significance" in ext_sources.dtype.names else "ls_sig"
+    for c in cand:
+        if abs(float(ext_sources[c][lsf]) - ls_sig) < 1:
+            best = c
+            break
+    return float(ext_sources[best]["px"]), float(ext_sources[best]["py"])
 
 
 def main():
@@ -59,6 +95,8 @@ def main():
 
     cfg = load_config(args.config)
     diag_dir = cfg["paths"]["diagnostics_dir"]
+    ext = _load_extraction_sources(cfg["paths"]["extraction_dir"])
+    print(f"Loaded {len(ext)} extraction source tables for pixel matching")
 
     rows = []
     for folder, (target, seg, mode, channel) in FOLDER_MAP.items():
@@ -72,12 +110,18 @@ def main():
             m = FNAME_RE.match(fname)
             if not m:
                 continue
+            det = m.group(3)
+            ra, dec, ls = float(m.group(7)), float(m.group(8)), float(m.group(5))
+            tbl = ext.get((target, seg, det, mode))
+            if tbl is None:  # zf sources share the ramp pixel grid
+                tbl = ext.get((target, seg, det, "ramp"))
+            px, py = _match_pixel(tbl, ra, dec, ls)
             rows.append({
                 "target": target, "segment": seg, "mode": mode, "channel": channel,
-                "detector": m.group(3), "src_id": int(m.group(2)),
-                "ra": float(m.group(7)), "dec": float(m.group(8)),
+                "detector": det, "src_id": int(m.group(2)),
+                "ra": ra, "dec": dec, "px": px, "py": py,
                 "snr": float(m.group(1)), "period_min": float(m.group(4)),
-                "ls_sig": float(m.group(5)), "amplitude": float(m.group(6)),
+                "ls_sig": ls, "amplitude": float(m.group(6)),
                 "folder": folder, "filename": fname,
             })
             n += 1
