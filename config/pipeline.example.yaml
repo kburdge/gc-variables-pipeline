@@ -61,9 +61,11 @@ correction:
   improvement_gate: 0.10  # require >=10% integration-scatter improvement to apply
 
 # --- Period search ----------------------------------------------------------
+# Periods from 20 min to 12 hr (paper §3.6): the 20-min floor avoids aliasing
+# against the ~3.2 min integration timescale and the saturation banding pattern.
 period_search:
-  lomb_scargle: {freq_min_cph: 0.0833, freq_max_cph: 60.0, n_points: 5000}
-  bls: {period_min_hr: 0.00833, period_max_hr: 6.0, duration_min_min: 0.5, duration_max_min: 30.0}
+  lomb_scargle: {freq_min_cph: 0.0833, freq_max_cph: 3.0, n_points: 5000}   # 12 hr .. 20 min
+  bls: {period_min_hr: 0.333, period_max_hr: 12.0, duration_min_min: 1.0, duration_max_min: 19.0}
   period_sentinel_min: 720   # "no period detected" sentinel
 
 # --- Catalog build ----------------------------------------------------------

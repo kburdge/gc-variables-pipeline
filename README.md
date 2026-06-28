@@ -34,7 +34,7 @@ reproduces the published catalog from shipped human-vetting labels.
 
 | Path | Data volume | Who it's for |
 |------|-------------|--------------|
-| **Demo** (`demo/`) | ~minutes from MAST, one detector × one segment | Anyone — runs on a workstation, verifies the toolchain end-to-end |
+| **Demo** (`demo/`) | ~minutes from MAST, one detector × one segment | Anyone — runs on a workstation, end-to-end to a recovered variable's light curve |
 | **Full reproduction** ([`docs/full_reproduction.md`](docs/full_reproduction.md)) | TB-scale download, multi-day compute | Reproducing the complete published catalog |
 
 To reproduce the **published catalog** without re-running the heavy calibration,
@@ -47,8 +47,12 @@ in [`CITATION.cff`](CITATION.cff)) and run the downstream catalog build.
 conda env create -f environment.yml
 conda activate gc-variables
 cp config/pipeline.example.yaml config/pipeline.yaml   # edit paths + CRDS context
-./demo/run_demo.sh
+./demo/run_demo.sh    # download -> calibrate -> cube -> detect+extract -> plot a variable
 ```
+
+The demo writes `demo/lightcurve_*.png` — the phase-folded light curve of the
+most significant variable recovered on the demo detector (a clean few-hour
+binary), confirming the toolchain works end to end.
 
 ## Reproducibility notes
 

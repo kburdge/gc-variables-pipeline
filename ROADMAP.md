@@ -22,9 +22,15 @@ shipped vetting labels, Zenodo data products). Tracking the porting work here.
 
 ### Core (port from /data/Globulars_Pipeline/code/core)
 - ✅ `pipeline/config.py` — YAML config loader, env expansion, CRDS-pin guard
-- ⬜ `pipeline/ramp_pipeline.py` — de-hardcode paths, read all params from config
-- ⬜ `pipeline/jwst_utils.py` — detection / photometry / WCS utilities
-- ⬜ Replace absolute `/data/...` and `/home/kburdge/...` paths with config values
+- ✅ `pipeline/detect.py` — autocorr reference + PSF-matched detection (ported)
+- ✅ `pipeline/photometry.py` — aperture photometry + chunked IQR clip (ported)
+- ✅ `pipeline/periods.py` — Lomb-Scargle + BLS, (peak-median)/MAD significance (ported)
+- ✅ `pipeline/extract.py` + `scripts/03_extract.py` — detect→photometer→clip→period→HDF5
+- ✅ `scripts/plot_lightcurve.py` — raw + phase-folded light-curve plot
+- ✅ **Demo validated end-to-end on real data** (Terzan5/Seg2/nrcb4): recovers the
+      3–7 hr binary population; clean 3.77 hr variable. Period window set to the
+      paper's 20 min–12 hr (was inheriting 1 min, which aliased on the integration timescale).
+- ⬜ Optional: multiprocess the per-source period search for full (un-capped) runs
 
 ### Downstream catalog build (port from code/analysis)
 - ⬜ `pipeline/catalog.py` — mapping → rebuild → corrections → best_stage

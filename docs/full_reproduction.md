@@ -36,11 +36,15 @@ essential product — MAST does not archive them) then `Image2Pipeline` for WCS.
 ## 3. Build group-diff cubes + detect + extract
 
 ```bash
-python scripts/02_extract.py --config config/pipeline.yaml --channel sw   # nrcb1-4, F200W
-python scripts/02_extract.py --config config/pipeline.yaml --channel lw   # nrcblong, F356W
+# group-differenced cubes (all detectors)
+python scripts/02_build_cubes.py --config config/pipeline.yaml --target Terzan5 --segment Segment2
+# detect variables + extract light curves (omit --max-sources for the full list)
+python scripts/03_extract.py --config config/pipeline.yaml --target Terzan5 --segment Segment2
 ```
-Produces the group-diff cubes, autocorrelation reference images, the extraction
-HDF5 files, and the diagnostic PNGs.
+Produces the group-diff cubes, autocorrelation reference images, and the
+per-detector extraction HDF5 files (positions, detection SNR, clipped light
+curves, LS/BLS periods). Inspect any source with
+`python scripts/plot_lightcurve.py ... --source <i>`.
 
 ## 4. Vet sources (or load shipped labels)
 

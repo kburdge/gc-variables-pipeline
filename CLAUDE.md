@@ -21,13 +21,29 @@ photometry from sources whose cores saturate.
 | 0. Download | `scripts/00_download_mast.py` | MAST (program GO-5381) | `uncal` exposures |
 | 1. Calibrate | `scripts/01_calibrate.py` → `pipeline/detector1.py` | `uncal` + **pinned CRDS** | calibrated `ramp` + `calints` |
 | 2. Cubes | `pipeline/groupdiff.py` | `ramp` | group-diff cubes (16 GB/detector) |
-| 3. Detect+extract | `scripts/02_extract.py` → `pipeline/ramp_pipeline.py` | cubes + autocorr ref | extraction HDF5 + diagnostics |
+| 3. Detect+extract | `scripts/03_extract.py` → `pipeline/{detect,photometry,periods,extract}.py` | cubes + calints | extraction HDF5 (+ `plot_lightcurve.py`) |
 | 4. **Vet (manual)** | human, or shipped labels | diagnostic PNGs | REAL/FAKE labels |
-| 5. Build catalog | `scripts/03_build_catalog.py` → `pipeline/catalog.py` | labels + extraction | `master_variable_catalog.h5` |
-| 6. View | `pipeline/server.py` | catalog + mosaics | web viewer (Aladin Lite) |
+| 5. Build catalog | `scripts/04_build_catalog.py` → `pipeline/catalog.py` (TODO) | labels + extraction | `master_variable_catalog.h5` |
+| 6. View | `pipeline/server.py` (TODO) | catalog + mosaics | web viewer (Aladin Lite) |
 
 Stage 4 is the one human-in-the-loop step. For reproducibility we **ship the
 vetting labels** (Zenodo) so stage 5 is deterministic; you do not need to re-vet.
+
+### Stage 3 detail (implemented + validated)
+`pipeline/extract.py` orchestrates: build lag-1 autocorrelation reference from
+calints (`detect.create_autocorr_reference`) → PSF-matched detection
+(`detect.fast_psf_detect`) → r=1.5px aperture photometry on the group-diff cube
+(`photometry`) → chunked IQR clip → Lomb-Scargle + BLS period search
+(`periods`) → per-detector extraction HDF5. `--max-sources N` keeps the top-N
+detections by SNR for fast/demo runs (the 3σ autocorr detection is permissive —
+~16k raw peaks per detector — and is vetted down by eye in the full pipeline).
+Validated end-to-end on Terzan5/Segment2/nrcb4: recovers the 3–7 hr binary
+period population (e.g. a clean 3.77 hr variable). `plot_lightcurve.py` renders
+raw + phase-folded light curves.
+
+**Period window:** the search runs 20 min – 12 hr (`freq_max_cph: 3.0`). The
+20-min floor is deliberate — shorter periods alias against the ~3.2 min
+integration timescale and the saturation banding pattern (paper §3.6).
 
 ## Conventions that matter (learned the hard way)
 

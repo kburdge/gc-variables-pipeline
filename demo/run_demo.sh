@@ -25,9 +25,16 @@ echo ">> [1/2] calibrate (calwebb_detector1 + Image2, pinned CRDS)"
 $PY "$ROOT/scripts/01_calibrate.py" --config "$CONFIG" \
     --target "$DEMO_TARGET" --segment "$DEMO_SEGMENT" --detector "$DEMO_DETECTOR"
 
-echo ">> [2/2] build group-differenced cube"
+echo ">> [2/4] build group-differenced cube"
 $PY "$ROOT/scripts/02_build_cubes.py" --config "$CONFIG" \
     --target "$DEMO_TARGET" --segment "$DEMO_SEGMENT" --detector "$DEMO_DETECTOR"
 
-echo ">> front-end complete. Cube written under the configured refs_dir."
-echo ">> (detection + extraction + light-curve plot: coming next — see ROADMAP.md)"
+echo ">> [3/4] detect variables + extract light curves (top 800 by SNR, for speed)"
+$PY "$ROOT/scripts/03_extract.py" --config "$CONFIG" \
+    --target "$DEMO_TARGET" --segment "$DEMO_SEGMENT" --detector "$DEMO_DETECTOR" --max-sources 800
+
+echo ">> [4/4] plot the most significant variable"
+$PY "$ROOT/scripts/plot_lightcurve.py" --config "$CONFIG" \
+    --target "$DEMO_TARGET" --segment "$DEMO_SEGMENT" --detector "$DEMO_DETECTOR" --demo-source
+
+echo ">> done — see demo/lightcurve_*.png for a recovered variable."
