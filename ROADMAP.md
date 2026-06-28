@@ -44,7 +44,12 @@ shipped vetting labels, Zenodo data products). Tracking the porting work here.
       double IQR clip → RA/Dec → fills `sources` pixel fields + `lightcurves/{seg}/{mode}/{det}`.
       **Validated on Terzan 5: 11/12 sky-matched lightcurves reproduce the published catalog at corr = 1.000**
       (the 12th is a new source with no published counterpart).
-- ⬜ Saturation + slope corrections + `best_stage` table (port build_corrected_catalog.py; needs uncal)
+- ✅ Saturation + slope corrections + `best_stage` table (`pipeline/corrections.py`, `scripts/05_corrections.py`):
+      per-pixel quadratic ratio model from uncal + flux-dependent slope + bkg rescale + 4-stage
+      best selection (10% gate). **Validated on Terzan 5: best-stage 116/116 agreement with the
+      published catalog; sat_corrected lightcurves median corr = 1.000.**
+- ⬜ Segment 1 dithered stitching (port add_segment1_terzan5.py: per-group ratio sat corr →
+      slope → per-block slope-aware stitching → exposure rejection → bkg rescale)
 - ⬜ Full Liller 1 run (heavier: 4 segments) + web-viewer port
 - ⬜ Determinism check: rebuilt catalog == published catalog (note: current folders → 1,362 vs published 1,315; folders grew ~47 since last build)
 
