@@ -1,0 +1,28 @@
+# Conda environment for gc-variables-pipeline.
+#   conda env create -f environment.yml
+#   conda activate gc-variables
+#
+# REPRODUCIBILITY: JWST calibration is only deterministic if the CRDS reference
+# context is pinned. After activating, set (and record in your run log):
+#   export CRDS_PATH=$HOME/crds_cache
+#   export CRDS_SERVER_URL=https://jwst-crds.stsci.edu
+#   export CRDS_CONTEXT=jwst_1322.pmap     # the context used for the published reduction
+# (Published reduction used jwst calibration 1.17.1 with CRDS context jwst_1322.pmap.)
+name: gc-variables
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - scipy
+  - matplotlib
+  - h5py
+  - astropy
+  - photutils
+  - astroquery        # MAST download
+  - pyyaml
+  - tqdm
+  - pip:
+      - jwst          # STScI calibration pipeline (pulls crds, stcal, etc.)
+      # - cupy-cuda12x  # OPTIONAL: only for the GPU every-pixel transit search

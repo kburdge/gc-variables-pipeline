@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: "gc-variables-pipeline"
+message: "If you use this software, please cite the paper and this software DOI."
+type: software
+authors:
+  - given-names: Kevin B.
+    family-names: Burdge
+    email: kburdge@mit.edu
+    affiliation: "Massachusetts Institute of Technology"
+    orcid: "https://orcid.org/0000-0002-7226-836X"
+repository-code: "https://github.com/kburdge/gc-variables-pipeline"
+license: MIT          # confirm: MIT vs BSD-3-Clause
+version: "0.1.0-dev"
+doi: "10.5281/zenodo.XXXXXXX"   # <-- mint on Zenodo, fill in
+preferred-citation:
+  type: article
+  title: "JWST Reveals a Thousand Variable Stars in the Bulge Globular Clusters Terzan 5 and Liller 1"
+  authors:
+    - given-names: Kevin B.
+      family-names: Burdge
+  year: 2026
+  journal: "TBD"

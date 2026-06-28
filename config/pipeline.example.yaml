@@ -1,0 +1,77 @@
+# ============================================================================
+# gc-variables-pipeline configuration (TEMPLATE)
+# Copy to config/pipeline.yaml and edit the `paths` and `crds` sections.
+# Every path the pipeline uses comes from here — there are NO hardcoded paths.
+# ============================================================================
+
+version: "1.0"
+
+# --- Reproducibility: pin the JWST calibration reference context ------------
+crds:
+  context: jwst_1322.pmap          # CRDS context used for the published reduction (jwst cal 1.17.1)
+  path: ${HOME}/crds_cache         # local CRDS cache
+  server_url: https://jwst-crds.stsci.edu
+
+# --- Where data lives (EDIT THESE) ------------------------------------------
+paths:
+  data_root: ./data/jwst           # uncal / ramp / calints per target/segment
+  refs_dir:  ./data/refs           # group-diff cubes, autocorr + WCS references
+  extraction_dir: ./data/extraction
+  catalogs_dir:   ./data/catalogs
+  diagnostics_dir: ./data/diagnostics
+  logs_dir: ./logs
+  psf_f200w: ./data/psf/PSF_NIRCam_in_flight_opd_filter_F200W.fits
+  psf_f356w: ./data/psf/PSF_NIRCam_in_flight_opd_filter_F356W.fits
+
+# --- Targets / observing setup ----------------------------------------------
+# program: JWST GO-5381, NIRCam Module B, BRIGHT2, 10 groups/int.
+targets:
+  Liller1:
+    segments: [Segment3, Segment4]
+    center_ra: 263.337
+    center_dec: -33.398
+  Terzan5:
+    segments: [Segment2]           # Segment1 is dithered; second-epoch only
+    center_ra: 267.020
+    center_dec: -24.779
+detectors_sw: [nrcb1, nrcb2, nrcb3, nrcb4]   # F200W
+detector_lw: nrcblong                         # F356W
+
+# --- Detection --------------------------------------------------------------
+detection:
+  method: autocorr        # lag-1 temporal autocorrelation reference image
+  ramp_sigma: 3.0         # PSF-matched filter threshold (ramp)
+  zf_sigma: 5.0           # PSF-matched filter threshold (zeroframe)
+  psf_kernel_size: 21
+  min_separation: 1
+  crossmatch_radius: 0.1  # arcsec
+
+# --- Photometry -------------------------------------------------------------
+photometry:
+  aperture_radius: 1.5    # pixels, circular, no background annulus
+  use_annulus: false
+
+# --- IQR clipping -----------------------------------------------------------
+clipping:
+  ramp: {chunk_size: 18, iqr_factor: 2.0, min_points: 500}
+  zf:   {chunk_size: 4,  iqr_factor: 2.0, min_points: 30}
+
+# --- Lightcurve correction --------------------------------------------------
+correction:
+  improvement_gate: 0.10  # require >=10% integration-scatter improvement to apply
+
+# --- Period search ----------------------------------------------------------
+period_search:
+  lomb_scargle: {freq_min_cph: 0.0833, freq_max_cph: 60.0, n_points: 5000}
+  bls: {period_min_hr: 0.00833, period_max_hr: 6.0, duration_min_min: 0.5, duration_max_min: 30.0}
+  period_sentinel_min: 720   # "no period detected" sentinel
+
+# --- Catalog build ----------------------------------------------------------
+catalog:
+  dedup_radius_arcsec: 0.2
+  friends_of_friends_radius_arcsec: 1.0
+  vetting_labels: ./data/vetting_labels   # shipped REAL/FAKE labels (from Zenodo)
+
+# --- Processing -------------------------------------------------------------
+processing:
+  n_workers: null         # null => cpu_count - 1

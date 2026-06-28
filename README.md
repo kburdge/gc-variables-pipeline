@@ -1,65 +1,71 @@
-# JWST Globular Cluster Variable Star Pipeline
+# gc-variables-pipeline
 
-Production pipeline code for JWST NIRCam time-series photometry of globular clusters (Liller 1, Terzan 5). Scripts are added to this repository one-by-one as they are documented in the accompanying paper.
+JWST/NIRCam time-series photometry pipeline for detecting and characterizing
+variable stars in crowded, heavily reddened stellar fields — built for the
+bulge globular clusters **Liller 1** and **Terzan 5** (JWST GO-5381), and
+applicable to any undithered NIRCam stare.
 
-**Paper repo:** [kburdge/gc-variables-paper](https://github.com/kburdge/gc-variables-paper)
+This is the reproduction package for Burdge et al. (2026), *"JWST Reveals a
+Thousand Variable Stars in the Bulge Globular Clusters Terzan 5 and Liller 1."*
+It turns raw `uncal` exposures from MAST into the published variable-star
+catalog, by synthesizing ~21-second-cadence light curves from the individual
+non-destructive detector readout groups within each integration ramp.
 
-## Astrometry (Appendix A)
+> **Status:** scaffolding in progress. See [`ROADMAP.md`](ROADMAP.md) for what
+> is implemented vs. forthcoming. The reproducibility appendix of the paper
+> walks through the same steps documented here.
 
-Two-stage absolute astrometry pipeline tying NIRCam positions to the Gaia DR3 reference frame.
+## What it does
 
-### Scripts
-
-| Script | Purpose | Paper section |
-|--------|---------|---------------|
-| `calibrate_lw_astrometry.py` | LW (nrcblong) to Gaia DR3 alignment | Appendix A.1 |
-| `calibrate_sw_astrometry_lw.py` | SW (nrcb1-4) to LW cross-match alignment | Appendix A.2 |
-| `build_lw_match_table.py` | Build FITS match table for TOPCAT inspection | Appendix A.1 |
-| `run_astrometry_pipeline.sh` | Run full astrometry chain for both targets | Appendix A |
-
-### Method
-
-**Stage 1: LW to Gaia** (`calibrate_lw_astrometry.py`)
-- Detect sources in uncal ZF median with DAOStarFinder across a grid of FWHM values (4-30 px)
-- For each Gaia source, select the FWHM giving the best (smallest |roundness1|) match
-- Filter to |roundness1| < 0.1, IQR clip residuals, compute median shift
-- Apply as rigid CRVAL correction preserving JWST SIP distortion
-- Terzan 5: 97 matches (G < 17.5), 2.2 mas uncertainty, 12 mas median residual
-- Liller 1: 45-46 matches (G < 18), 1.1 mas uncertainty, 5-6 mas median residual
-
-**Stage 2: SW to LW** (`calibrate_sw_astrometry_lw.py`)
-- Cross-match SW and LW zero-frame detections within 0.2"
-- 289-631 references per detector, 2.5-6 mas median residuals
-- Median shift applied as CRVAL correction
-
-### Usage
-
-```bash
-# Full pipeline (both targets)
-bash analysis/run_astrometry_pipeline.sh
-
-# Individual targets
-python analysis/calibrate_lw_astrometry.py --target Terzan5
-python analysis/calibrate_lw_astrometry.py --target Liller1
-python analysis/calibrate_sw_astrometry_lw.py --target Terzan5
-python analysis/calibrate_sw_astrometry_lw.py --target Liller1
-
-# Build TOPCAT match table for inspection
-python analysis/build_lw_match_table.py --target Terzan5 --seg Segment2
+```
+MAST uncal  ──▶  calwebb_detector1   ──▶  group-diff cubes  ──▶  autocorr
+(raw)            (pinned CRDS context)     (21 s cadence)         detection
+                                                                     │
+   published catalog  ◀── catalog build ◀── human REAL/FAKE vetting ◀┘
+   (Zenodo DOI)            (+ corrections)   (labels shipped on Zenodo)
 ```
 
-### Systematic Error Budget
+A novel **lag-1 autocorrelation** detection image finds variables independent of
+brightness; a multi-stage **saturation + slope correction** recovers photometry
+for sources whose cores are saturated; and a deterministic catalog build
+reproduces the published catalog from shipped human-vetting labels.
 
-| Component | Uncertainty |
-|-----------|------------|
-| Gaia frame tie (LW) | 1-2 mas |
-| LW-to-SW transfer | ~0.2 mas |
-| Centroid precision | ~3 mas |
-| **Total (quadrature)** | **3.2-3.5 mas** |
+## Two ways to run
 
-Validated by PSR J1748-2446A: JWST RA agrees with radio timing to 0.3 mas.
+| Path | Data volume | Who it's for |
+|------|-------------|--------------|
+| **Demo** (`demo/`) | ~minutes from MAST, one detector × one segment | Anyone — runs on a workstation, verifies the toolchain end-to-end |
+| **Full reproduction** ([`docs/full_reproduction.md`](docs/full_reproduction.md)) | TB-scale download, multi-day compute | Reproducing the complete published catalog |
 
-## Environment
+To reproduce the **published catalog** without re-running the heavy calibration,
+download the intermediate products + vetting labels from the Zenodo record (DOI
+in [`CITATION.cff`](CITATION.cff)) and run the downstream catalog build.
 
-- Python 3.12 (miniconda3)
-- Key packages: astropy, photutils, numpy, scipy, matplotlib, h5py
+## Quickstart (demo)
+
+```bash
+conda env create -f environment.yml
+conda activate gc-variables
+cp config/pipeline.example.yaml config/pipeline.yaml   # edit paths + CRDS context
+./demo/run_demo.sh
+```
+
+## Reproducibility notes
+
+- **CRDS context is pinned** in `environment.yml` / `config/pipeline.example.yaml`.
+  JWST calibration is only deterministic if everyone uses the same reference
+  files — set `CRDS_CONTEXT` to the value recorded in the paper.
+- **No hardcoded paths.** All paths come from `config/pipeline.yaml`.
+- **The catalog is reproducible** from the shipped vetting labels; the original
+  REAL/FAKE classification was manual visual inspection (paper §3.8).
+
+## Documentation
+
+- [`docs/flowchart.md`](docs/flowchart.md) — full data-flow diagram
+- [`docs/full_reproduction.md`](docs/full_reproduction.md) — the TB-scale path
+- [`CLAUDE.md`](CLAUDE.md) — orientation for working in this repo with Claude Code
+
+## Citation
+
+If you use this pipeline, please cite the paper and the software DOI — see
+[`CITATION.cff`](CITATION.cff).
