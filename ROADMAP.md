@@ -14,12 +14,14 @@ shipped vetting labels, Zenodo data products). Tracking the porting work here.
 - ✅ Paper reproducibility appendix + flowchart figure (draft)
 
 ### Front-end (raw → cubes) — the new, reproducibility-critical part
-- ⬜ `scripts/00_download_mast.py` — astroquery MAST query for GO-5381 uncal
-- ⬜ `pipeline/detector1.py` — calwebb_detector1 wrapper, `save_calibrated_ramp=True`, **pinned CRDS context**
-- ⬜ `pipeline/groupdiff.py` — group-diff cube construction from ramp files
-- ⬜ Confirm/record the exact CRDS pmap used for the published reduction
+- ✅ `scripts/00_download_mast.py` — astroquery MAST query for GO-5381 uncal (validated against live MAST)
+- ✅ `pipeline/detector1.py` — calwebb_detector1 wrapper, `save_calibrated_ramp=True`, **pinned CRDS context**
+- ✅ `pipeline/groupdiff.py` — group-diff cube construction from ramp files (ported, config-driven)
+- ✅ CRDS context recorded: **jwst_1322.pmap** (jwst cal 1.17.1), from the calibrated FITS headers
+- ⬜ End-to-end test of the demo front-end on real data (download → calibrate → cube)
 
 ### Core (port from /data/Globulars_Pipeline/code/core)
+- ✅ `pipeline/config.py` — YAML config loader, env expansion, CRDS-pin guard
 - ⬜ `pipeline/ramp_pipeline.py` — de-hardcode paths, read all params from config
 - ⬜ `pipeline/jwst_utils.py` — detection / photometry / WCS utilities
 - ⬜ Replace absolute `/data/...` and `/home/kburdge/...` paths with config values
