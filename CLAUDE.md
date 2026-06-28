@@ -22,8 +22,8 @@ photometry from sources whose cores saturate.
 | 1. Calibrate | `scripts/01_calibrate.py` → `pipeline/detector1.py` | `uncal` + **pinned CRDS** | calibrated `ramp` + `calints` |
 | 2. Cubes | `pipeline/groupdiff.py` | `ramp` | group-diff cubes (16 GB/detector) |
 | 3. Detect+extract | `scripts/03_extract.py` → `pipeline/{detect,photometry,periods,extract}.py` | cubes + calints | extraction HDF5 (+ `plot_lightcurve.py`) |
-| 4. **Vet (manual)** | human, or shipped labels | diagnostic PNGs | REAL/FAKE labels |
-| 5. Build catalog | `scripts/04_build_catalog.py` → `pipeline/catalog.py` (TODO) | labels + extraction | `master_variable_catalog.h5` |
+| 4. **Vet (manual)** | human, or shipped labels (`export_vetting_labels.py`) | diagnostic PNGs | `vetting_labels.csv` |
+| 5. Build catalog | `scripts/04_build_catalog.py` → `pipeline/catalog.py` | labels (+ extraction) | `master_variable_catalog.h5` |
 | 6. View | `pipeline/server.py` (TODO) | catalog + mosaics | web viewer (Aladin Lite) |
 
 Stage 4 is the one human-in-the-loop step. For reproducibility we **ship the
@@ -44,6 +44,24 @@ raw + phase-folded light curves.
 **Period window:** the search runs 20 min – 12 hr (`freq_max_cph: 3.0`). The
 20-min floor is deliberate — shorter periods alias against the ~3.2 min
 integration timescale and the saturation banding pattern (paper §3.6).
+
+### Stage 5 detail (catalog construction, implemented + validated)
+`export_vetting_labels.py` (author tool) scans the REAL/ diagnostic folders and
+writes `vetting_labels.csv` — the shipped, deterministic record of the human
+classification (one row per REAL detection: target/segment/mode/channel/detector,
+ra, dec, snr, ...). `pipeline/catalog.build_mapping` then deduplicates those
+detections across all folders at 0.2" (SNR-ordered single-link) into unique
+objects with a `master_id`, and `write_source_table` writes the per-target
+`sources` compound table. Validated byte-for-byte against the original
+`build_master_mapping.py` (identical counts on the same folders). The lightcurve
+population (centroid refine + forced photometry + RA/Dec via LW WCS) and the
+sat/slope corrections are the next port stages; `refine_centroid` is already
+ported in `catalog.py`.
+
+**Count note:** the deduplication currently yields 1,362 objects (939 Liller 1,
+423 Terzan 5) from the present REAL folders — vs the published 1,315; the folders
+gained ~47 vetted sources since the catalog was last built. Not a bug (the
+original script agrees exactly); a rebuild would update the headline number.
 
 ## Conventions that matter (learned the hard way)
 

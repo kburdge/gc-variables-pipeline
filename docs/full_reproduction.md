@@ -59,10 +59,15 @@ subfolders (this is the human-judgment step described in paper §3.8).
 ## 5. Build the catalog
 
 ```bash
-python scripts/03_build_catalog.py --config config/pipeline.yaml
+python scripts/04_build_catalog.py --config config/pipeline.yaml --labels vetting_labels.csv
 ```
-Mapping/dedup → centroid refinement → light-curve extraction → saturation &
-slope corrections → best-stage selection → `master_variable_catalog.h5`.
+Deduplicates the shipped vetting labels into unique objects (0.2", SNR-ordered)
+and writes the per-target `sources` tables to `master_variable_catalog.h5`.
+Light-curve population (centroid refine → forced photometry → RA/Dec) and the
+saturation/slope corrections are the remaining port stages (see ROADMAP.md).
+
+(Authors only: regenerate the shipped labels from the diagnostics tree with
+`python scripts/export_vetting_labels.py --config config/pipeline.yaml --out vetting_labels.csv`.)
 
 ## Reproduce from products (recommended shortcut)
 

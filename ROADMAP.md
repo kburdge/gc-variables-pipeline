@@ -33,10 +33,14 @@ shipped vetting labels, Zenodo data products). Tracking the porting work here.
 - ⬜ Optional: multiprocess the per-source period search for full (un-capped) runs
 
 ### Downstream catalog build (port from code/analysis)
-- ⬜ `pipeline/catalog.py` — mapping → rebuild → corrections → best_stage
-- ⬜ Read **shipped vetting labels** instead of scanning local REAL/FAKE folders
-- ⬜ `scripts/03_build_catalog.py` orchestrator (cf. build_catalog.sh in the source tree)
-- ⬜ Determinism check: rebuilt catalog == published catalog (within tolerance)
+- ✅ `scripts/export_vetting_labels.py` — REAL folders → shipped `vetting_labels.csv`
+- ✅ `pipeline/catalog.build_mapping` — 0.2" SNR-ordered dedup → unique objects (faithful: matches original exactly)
+- ✅ `pipeline/catalog.write_source_table` + `scripts/04_build_catalog.py` — per-target `sources` tables
+- ✅ Read **shipped vetting labels** instead of scanning local REAL/FAKE folders
+- ✅ `refine_centroid` ported (for the LC stage)
+- ⬜ Lightcurve population: pixel positions from extraction → centroid refine → forced photometry on cubes → RA/Dec via LW WCS → fill `sources` pixel fields + `lightcurves/{seg}/{mode}/{det}`
+- ⬜ Saturation + slope corrections + `best_stage` table (port build_corrected_catalog.py; needs uncal)
+- ⬜ Determinism check: rebuilt catalog == published catalog (note: current folders → 1,362 vs published 1,315; folders grew ~47 since last build)
 
 ### Demo subset
 - ⬜ Pick the lightest representative slice (one detector, one segment) incl. a
