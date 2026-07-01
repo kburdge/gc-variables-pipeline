@@ -3,9 +3,15 @@
 Stage 5 of the pipeline (paper §3.7). Takes the human REAL/FAKE vetting labels
 (exported by scripts/export_vetting_labels.py, shipped on Zenodo) and:
 
-  build_mapping()      deduplicate REAL detections across detectors/segments/
-                       modes/channels at 0.2" (SNR-ordered) -> unique objects
-                       with a master_id (the 1,315-object source list).
+  load_manual_mapping() read the shipped manual deduplication decisions
+                       (dedup_groups.csv or master_source_mapping.json) —
+                       THE way to reproduce the published 1,315-object catalog
+                       with its exact master_ids.
+  build_mapping()      automatic fallback: deduplicate REAL detections at 0.2"
+                       (SNR-ordered). Yields a few percent MORE objects than
+                       the manual dedup (unmerged PSF-wing detections of bright
+                       stars) and different IDs — fine for new data, but it
+                       will NOT reproduce the published catalog.
   write_source_table() write the per-target `sources` compound table into
                        master_variable_catalog.h5.
 
@@ -13,11 +19,14 @@ The lightcurve population (centroid refinement + forced photometry on the
 group-diff cubes + RA/Dec from the LW-aligned WCS) is the next stage; the
 faithful helpers it needs (refine_centroid, clip_iqr) are ported here.
 
-Ported from build_master_mapping.py / rebuild_master_catalog_v2.py.
+Ported from build_mapping_from_crossmatch.py / build_master_mapping.py /
+rebuild_master_catalog_v2.py.
 """
 from __future__ import annotations
 
 import csv
+import json
+import os
 
 import numpy as np
 import h5py
@@ -53,15 +62,127 @@ def load_labels(csv_path):
     return rows
 
 
+def _mode_channel_from_folder(folder):
+    """Derive (mode, channel) from a diagnostics folder name.
+
+    Folder names look like Liller1_ramp_Segment3, Terzan5_zf_LW,
+    Liller1_zf_Segment4_LW, ... (the 12 FOLDER_MAP names).
+    """
+    mode = "zf" if ("_zf_" in folder or folder.endswith("_zf")) else "ramp"
+    channel = "lw" if folder.endswith("_LW") else "sw"
+    return mode, channel
+
+
+def load_manual_mapping(path):
+    """Load the shipped manual deduplication decisions.
+
+    Accepts either the released ``dedup_groups.csv`` (one row per detection,
+    written by scripts/export_dedup_groups.py) or the original
+    ``master_source_mapping.json``. Returns master entries in the same shape
+    ``build_mapping`` produces, but with the SHIPPED master_ids preserved —
+    never re-derived — so the catalog matches the published one exactly
+    (1,315 objects: 915 Liller 1 + 400 Terzan 5; Terzan 5 = IDs 0-399).
+    """
+    if str(path).endswith(".json"):
+        with open(path) as fh:
+            entries = json.load(fh)
+        master = []
+        for e in entries:
+            detections = {}
+            best_det = None
+            best_snr = -1.0
+            for folder, d in e["detections"].items():
+                mode, channel = _mode_channel_from_folder(folder)
+                rec = {
+                    "target": e["target"], "segment": d["segment"], "mode": mode,
+                    "channel": channel, "detector": d["det"], "folder": folder,
+                    "src_id": -1, "ra": e["ra"], "dec": e["dec"],
+                    "snr": float(d["snr"]), "px": float(d["px"]), "py": float(d["py"]),
+                    "ls_sig": float("nan"), "filename": d.get("filename", ""),
+                }
+                detections[folder] = rec
+                if rec["snr"] > best_snr:
+                    best_snr, best_det = rec["snr"], rec["detector"]
+            master.append({
+                "master_id": int(e["master_id"]), "target": e["target"],
+                "ra": float(e["ra"]), "dec": float(e["dec"]),
+                "best_snr": float(e["best_snr"]), "detector": best_det or "",
+                "n_detections": len(detections), "detections": detections,
+                "obj_folder": e.get("obj_folder"), "sub_folder": e.get("sub_folder"),
+            })
+    else:
+        by_id = {}
+        with open(path) as fh:
+            for r in csv.DictReader(fh):
+                mid = int(r["master_id"])
+                m = by_id.setdefault(mid, {
+                    "master_id": mid, "target": r["target"],
+                    "ra": float(r["obj_ra"]), "dec": float(r["obj_dec"]),
+                    "best_snr": float(r["obj_best_snr"]), "detector": "",
+                    "detections": {}, "obj_folder": r.get("obj_group"),
+                    "sub_folder": r.get("split") or None,
+                })
+                rec = {
+                    "target": r["target"], "segment": r["segment"], "mode": r["mode"],
+                    "channel": r["channel"], "detector": r["detector"],
+                    "folder": r["folder"], "src_id": -1,
+                    "ra": float(r["obj_ra"]), "dec": float(r["obj_dec"]),
+                    "snr": float(r["snr"]), "px": float(r["px"]), "py": float(r["py"]),
+                    "ls_sig": float("nan"), "filename": r.get("filename", ""),
+                }
+                m["detections"][r["folder"]] = rec
+        master = sorted(by_id.values(), key=lambda m: m["master_id"])
+        for m in master:
+            m["n_detections"] = len(m["detections"])
+            m["detector"] = max(m["detections"].values(), key=lambda d: d["snr"])["detector"]
+
+    ids = [m["master_id"] for m in master]
+    if len(set(ids)) != len(ids):
+        raise ValueError(f"duplicate master_ids in {path}")
+    counts = {}
+    for m in master:
+        counts[m["target"]] = counts.get(m["target"], 0) + 1
+    print(f"[catalog] manual mapping: {len(master)} objects "
+          + " ".join(f"{t}={n}" for t, n in sorted(counts.items())))
+    return master
+
+
+def resolve_mapping(cfg, dedup_path=None, labels_path="vetting_labels.csv"):
+    """Resolve the master mapping the same way in every downstream stage.
+
+    Priority: explicit dedup_path > config catalog.dedup_groups (if the file
+    exists) > automatic build_mapping from the vetting labels (with a warning).
+    Stages 04 (catalog build) and 05 (corrections) must both use this so their
+    master_ids agree.
+    """
+    dedup = dedup_path or cfg.get("catalog", {}).get("dedup_groups")
+    if dedup and os.path.exists(dedup):
+        return load_manual_mapping(dedup)
+    if dedup_path:
+        raise FileNotFoundError(f"dedup file not found: {dedup_path}")
+    print("WARNING: no shipped dedup_groups file found - falling back to automatic "
+          "0.2\" dedup. This will NOT reproduce the published 1,315-object catalog "
+          "or its master_ids (expect a few percent more objects).")
+    labels = load_labels(labels_path)
+    print(f"Loaded {len(labels)} REAL detection labels")
+    return build_mapping(labels, dedup_arcsec=cfg["catalog"]["dedup_radius_arcsec"])
+
+
 def build_mapping(labels, dedup_arcsec=0.2):
-    """Deduplicate REAL detections into unique objects.
+    """Automatic fallback deduplication of REAL detections into unique objects.
 
     SNR-ordered single-link merge: the brightest detection seeds each object;
     later detections within ``dedup_arcsec`` (and same target) attach to it,
     otherwise they seed a new object. Mirrors build_master_mapping.py exactly.
 
+    WARNING: this does not honor the manual merge/split decisions that define
+    the published catalog — use load_manual_mapping with the shipped
+    dedup_groups.csv to reproduce it. Automatic matching yields a few percent
+    more objects (unmerged wing detections of bright stars) and different IDs.
+
     Returns a list of master entries sorted by (target, -best_snr) with a
-    contiguous master_id assigned per the published convention (Liller1 first).
+    contiguous master_id assigned per the published convention (Terzan5 first,
+    IDs 0-399, then Liller1).
     """
     srcs = sorted(labels, key=lambda s: -s["snr"])
     master = []
@@ -94,8 +215,9 @@ def build_mapping(labels, dedup_arcsec=0.2):
             master_sc = SkyCoord(ra=[m["ra"] for m in master] * u.deg,
                                  dec=[m["dec"] for m in master] * u.deg)
 
-    # sort Liller1 first then by descending SNR, assign contiguous master_id
-    order = {"Liller1": 0, "Terzan5": 1}
+    # sort Terzan5 first then by descending SNR (the published ID convention:
+    # Terzan5 = 0-399, Liller1 = 400+), assign contiguous master_id
+    order = {"Terzan5": 0, "Liller1": 1}
     master.sort(key=lambda m: (order.get(m["target"], 2), -m["best_snr"]))
     for i, m in enumerate(master):
         m["master_id"] = i
@@ -352,8 +474,13 @@ def populate_lightcurves(cfg, master, out_h5, targets=("Liller1", "Terzan5")):
                         valid = (raw != 0) & np.isfinite(raw)
                         if valid.sum() < 20:
                             continue
-                        fc, tc = clip_outliers_iqr(raw[valid], t_hr[valid], chunk, 2.0)
-                        fc, tc = clip_outliers_iqr(fc, tc, chunk, 2.0)
+                        # merge_final_chunk=False: the production code that built
+                        # the published lightcurves left trailing partial chunks
+                        # unclipped (rebuild_master_catalog_v2.clip_iqr)
+                        fc, tc = clip_outliers_iqr(raw[valid], t_hr[valid], chunk, 2.0,
+                                                   merge_final_chunk=False)
+                        fc, tc = clip_outliers_iqr(fc, tc, chunk, 2.0,
+                                                   merge_final_chunk=False)
                         keep = set(np.round(tc, 8))
                         for k in range(nf):
                             if round(t_hr[k], 8) in keep:

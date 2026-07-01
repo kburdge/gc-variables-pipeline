@@ -20,13 +20,16 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pipeline.config import load_config  # noqa: E402
-from pipeline.catalog import load_labels, build_mapping, write_source_table  # noqa: E402
+from pipeline.catalog import resolve_mapping, write_source_table  # noqa: E402
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", default="config/pipeline.yaml")
     ap.add_argument("--labels", default="vetting_labels.csv", help="shipped vetting-label CSV")
+    ap.add_argument("--dedup", help="shipped manual dedup decisions "
+                                    "(dedup_groups.csv or master_source_mapping.json); "
+                                    "required to reproduce the published catalog exactly")
     ap.add_argument("--out", help="output catalog HDF5 (default: <catalogs_dir>/master_variable_catalog.h5)")
     ap.add_argument("--with-lightcurves", action="store_true",
                     help="also populate centroids + lightcurves (needs cubes, autocorr, WCS)")
@@ -37,9 +40,7 @@ def main():
     out = args.out or os.path.join(cfg["paths"]["catalogs_dir"], "master_variable_catalog.h5")
     os.makedirs(os.path.dirname(out), exist_ok=True)
 
-    labels = load_labels(args.labels)
-    print(f"Loaded {len(labels)} REAL detection labels")
-    master = build_mapping(labels, dedup_arcsec=cfg["catalog"]["dedup_radius_arcsec"])
+    master = resolve_mapping(cfg, dedup_path=args.dedup, labels_path=args.labels)
     targets = tuple(args.target) if args.target else ("Liller1", "Terzan5")
 
     if args.with_lightcurves:
