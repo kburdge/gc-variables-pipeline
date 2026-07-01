@@ -6,8 +6,9 @@ machine paths anywhere else in the package.
 
 Reproducibility note: JWST calibration is only deterministic if the CRDS
 reference context is pinned. ``apply_crds_env()`` sets the relevant environment
-variables from the config and MUST be called *before* importing any ``jwst``
-pipeline module, because the CRDS context is resolved at import time.
+variables from the config; call it before importing any ``jwst`` pipeline
+module so the pinned context is in place when the steps resolve their
+references at run time.
 """
 from __future__ import annotations
 
@@ -63,12 +64,6 @@ def apply_crds_env(cfg: dict) -> str:
     return context
 
 
-def ensure_dirs(cfg: dict) -> None:
-    """Create the output directories named in cfg['paths'] if missing."""
-    for key, val in cfg.get("paths", {}).items():
-        if key.endswith("_dir") or key in ("refs_dir", "logs_dir"):
-            Path(val).mkdir(parents=True, exist_ok=True)
-
-
 def segments_for(cfg: dict, target: str) -> list[str]:
+    """Segments configured for a target (used by --all loops in scripts)."""
     return cfg["targets"][target]["segments"]

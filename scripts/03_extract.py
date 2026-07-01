@@ -23,15 +23,19 @@ def main():
     ap.add_argument("--target", required=True)
     ap.add_argument("--segment", required=True)
     ap.add_argument("--detector", help="one detector; default = all SW + LW from config")
+    ap.add_argument("--mode", choices=["ramp", "zf", "both"], default="ramp",
+                    help="extraction mode: group-diff cube (ramp), zeroframes (zf), or both")
     ap.add_argument("--max-sources", type=int, help="keep only top-N detections by SNR (demo/quick runs)")
     ap.add_argument("--overwrite", action="store_true")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
     detectors = [args.detector] if args.detector else list(cfg["detectors_sw"]) + [cfg["detector_lw"]]
+    modes = ["ramp", "zf"] if args.mode == "both" else [args.mode]
     for det in detectors:
-        extract_detector(cfg, args.target, args.segment, det,
-                         overwrite=args.overwrite, max_sources=args.max_sources)
+        for mode in modes:
+            extract_detector(cfg, args.target, args.segment, det, mode=mode,
+                             overwrite=args.overwrite, max_sources=args.max_sources)
 
 
 if __name__ == "__main__":

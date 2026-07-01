@@ -30,18 +30,27 @@ def find_calints(data_root, target, segment, detector):
     return sorted(set(candidates))
 
 
-def create_autocorr_reference(calints_files, output_path=None):
-    """Lag-1 temporal autocorrelation image from a list of calints files.
+_WCS_KEYS = ("CRPIX1", "CRPIX2", "CRVAL1", "CRVAL2", "CD1_1", "CD1_2",
+             "CD2_1", "CD2_2", "PC1_1", "PC1_2", "PC2_1", "PC2_2",
+             "CDELT1", "CDELT2", "CTYPE1", "CTYPE2", "CUNIT1", "CUNIT2", "RADESYS")
+
+
+def _wcs_header_from(src_header):
+    """Copy the 2D celestial WCS keywords out of a SCI header (if any)."""
+    hdr = fits.Header()
+    if src_header is None:
+        return hdr
+    for key in _WCS_KEYS:
+        if key in src_header:
+            hdr[key] = src_header[key]
+    return hdr
+
+
+def _lag1_autocorr(big):
+    """Lag-1 temporal autocorrelation image of a (nframes, ny, nx) stack.
 
     autocorr[pix] = sum_t r[t] r[t+1] / sum_t r[t]^2,   r[t] = f[t] - mean_t(f).
     """
-    cubes = []
-    for fn in sorted(calints_files):
-        with fits.open(fn, memmap=True) as hdul:
-            sci = hdul["SCI"] if "SCI" in hdul else hdul[1]
-            cubes.append(sci.data.astype(np.float32))
-    big = np.concatenate(cubes, axis=0)
-
     mean = np.nanmean(big, axis=0)
     resid = big - mean[None, :, :]
     cross = np.nansum(resid[:-1] * resid[1:], axis=0)
@@ -50,10 +59,44 @@ def create_autocorr_reference(calints_files, output_path=None):
         ac = np.where(var > 0, cross / var, 0.0)
     ac = np.clip(ac, -1.0, 1.0)
     ac[~np.isfinite(ac)] = 0.0
+    return ac.astype(np.float32)
+
+
+def create_autocorr_reference(calints_files, output_path=None):
+    """Lag-1 temporal autocorrelation image from a list of calints files."""
+    cubes = []
+    sci_header = None
+    for fn in sorted(calints_files):
+        with fits.open(fn, memmap=True) as hdul:
+            sci = hdul["SCI"] if "SCI" in hdul else hdul[1]
+            if sci_header is None:
+                sci_header = sci.header.copy()
+            cubes.append(sci.data.astype(np.float32))
+    big = np.concatenate(cubes, axis=0)
+    ac = _lag1_autocorr(big)
 
     if output_path:
         Path(os.path.dirname(output_path)).mkdir(parents=True, exist_ok=True)
-        fits.PrimaryHDU(data=ac.astype(np.float32)).writeto(output_path, overwrite=True)
+        hdr = _wcs_header_from(sci_header)
+        hdr["NFRAMES"] = big.shape[0]
+        hdr["DESCRIP"] = "Lag-1 temporal autocorrelation of calints"
+        fits.PrimaryHDU(data=ac, header=hdr).writeto(output_path, overwrite=True)
+    return ac
+
+
+def create_zf_autocorr_reference(zf_cube, output_path=None, wcs_header=None):
+    """Lag-1 temporal autocorrelation image from a zeroframe cube (in memory).
+
+    Same math as the calints reference; ported from the autocorr_detect branch
+    of process_detector_zeroframes in ramp_pipeline.py.
+    """
+    ac = _lag1_autocorr(np.asarray(zf_cube, dtype=np.float32))
+    if output_path:
+        Path(os.path.dirname(output_path)).mkdir(parents=True, exist_ok=True)
+        hdr = _wcs_header_from(wcs_header)
+        hdr["NFRAMES"] = np.asarray(zf_cube).shape[0]
+        hdr["DESCRIP"] = f"Lag-1 autocorrelation of {np.asarray(zf_cube).shape[0]}-frame ZF cube"
+        fits.PrimaryHDU(data=ac, header=hdr).writeto(output_path, overwrite=True)
     return ac
 
 

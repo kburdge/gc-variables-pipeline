@@ -19,7 +19,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pipeline.config import load_config  # noqa: E402
-from pipeline.groupdiff import create_groupdiff_cube  # noqa: E402
+from pipeline.groupdiff import create_groupdiff_cube, create_zeroframe_cube  # noqa: E402
 
 
 def main():
@@ -28,6 +28,8 @@ def main():
     ap.add_argument("--target", required=True)
     ap.add_argument("--segment", required=True)
     ap.add_argument("--detector", help="one detector; default = all SW + LW from config")
+    ap.add_argument("--skip-zeroframes", action="store_true",
+                    help="build only the group-diff cube (zeroframe cube is small and built by default)")
     ap.add_argument("--overwrite", action="store_true")
     args = ap.parse_args()
 
@@ -39,6 +41,8 @@ def main():
 
     for det in detectors:
         create_groupdiff_cube(cfg, args.target, args.segment, det, overwrite=args.overwrite)
+        if not args.skip_zeroframes:
+            create_zeroframe_cube(cfg, args.target, args.segment, det, overwrite=args.overwrite)
 
 
 if __name__ == "__main__":

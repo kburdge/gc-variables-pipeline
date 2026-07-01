@@ -3,9 +3,16 @@
 Differences consecutive non-destructive readout groups within each integration
 ramp to synthesize a high-cadence image cube: for 10 groups/integration this
 yields 9 group-differences per integration at the ~21.47 s group time, i.e.
-972 frames per ~7 hr visit. Bad pixels (PIXELDQ) and jump/saturation-flagged
-samples (GROUPDQ) are masked to NaN. Per-frame timestamps are the barycentric
-midpoints of each group pair, read from the ramp file's GROUP table.
+972 frames per ~7 hr visit. Statically bad pixels (PIXELDQ != 0) are masked to
+NaN. Per-frame timestamps are the barycentric midpoints of each group pair,
+read from the ramp file's GROUP table.
+
+Note on GROUPDQ: the mask below keeps the original's ``dq > 10`` threshold,
+which no GROUPDQ value in this program's data exceeds (values are 0-5:
+DO_NOT_USE/SATURATED/JUMP combinations). Saturated and jump-flagged groups are
+therefore deliberately left in the cube — they are handled downstream by IQR
+clipping and the saturation-correction stage. Kept as-is for bit-compatibility
+with the published cubes (verified identical to production output).
 
 Ported from create_groupdiff_cube() in the original ramp_pipeline.py, made
 config-driven (no hardcoded paths). The cubes are large (~16 GB per detector);
@@ -69,7 +76,10 @@ def create_groupdiff_cube(cfg, target, segment, detector, overwrite=False):
     sci_header = None
 
     for fn in ramp_files:
-        with fits.open(fn, memmap=True) as hdul:
+        # No memmap here: PIXELDQ is a scaled (BZERO) HDU, which astropy refuses
+        # to memory-map. Everything below is copied into memory regardless;
+        # memmap belongs on cube *reads*, not on ramp reads.
+        with fits.open(fn) as hdul:
             sci = hdul["SCI"].data.astype(np.float32)
             groupdq = hdul["GROUPDQ"].data
             pixeldq = hdul["PIXELDQ"].data
@@ -114,4 +124,69 @@ def create_groupdiff_cube(cfg, target, segment, detector, overwrite=False):
     time_hdu = fits.BinTableHDU.from_columns([col], name="DIFF_TIMES")
     fits.HDUList([primary, time_hdu]).writeto(outname, overwrite=True)
     print(f"[groupdiff] wrote {outname} ({cube.shape[0]} frames, {cube.shape[1]}x{cube.shape[2]})")
+    return outname
+
+
+def create_zeroframe_cube(cfg, target, segment, detector, overwrite=False):
+    """Create (or reuse) the zeroframe cube for one detector.
+
+    Stacks the ZEROFRAME planes of every exposure, dropping the first
+    integration's zero frame per exposure (it is systematically offset), so a
+    12-exposure x 9-integration visit yields 96 frames. Timestamps are the
+    integration midpoints from the INT_TIMES table.
+
+    Ported from build_zeroframe_cube + the cube save in
+    process_detector_zeroframes (ramp_pipeline.py). Inherited quirk kept for
+    bit-compatibility: the time column is named MID_BARY_MJD but holds
+    int_mid_MJD_UTC (UTC, not barycentric).
+    """
+    refs_dir = cfg["paths"]["refs_dir"]
+    Path(refs_dir).mkdir(parents=True, exist_ok=True)
+    outname = os.path.join(refs_dir, f"zeroframes_{target}_{segment}_{detector}.fits")
+    if os.path.exists(outname) and not overwrite:
+        print(f"[zeroframe] exists, skipping: {outname}")
+        return outname
+
+    ramp_files = get_ramp_files(cfg["paths"]["data_root"], target, segment, detector)
+    if not ramp_files:
+        raise FileNotFoundError(
+            f"No ramp files for {target}/{segment}/{detector} under "
+            f"{cfg['paths']['data_root']}. Run stage 1 (calibrate) first."
+        )
+    print(f"[zeroframe] {target}/{segment}/{detector}: {len(ramp_files)} ramp files")
+
+    zf_list, time_list = [], []
+    sci_header = None
+    for fn in ramp_files:
+        with fits.open(fn) as hdul:
+            if "ZEROFRAME" not in hdul:
+                print(f"[zeroframe] warning: no ZEROFRAME in {fn}")
+                continue
+            zf = hdul["ZEROFRAME"].data.astype(np.float32)
+            tmid = hdul["INT_TIMES"].data["int_mid_MJD_UTC"]
+            if sci_header is None and "SCI" in hdul:
+                sci_header = hdul["SCI"].header.copy()
+        for i in range(1, zf.shape[0]):   # drop first zero frame per exposure
+            zf_list.append(zf[i])
+            time_list.append(tmid[i])
+    if not zf_list:
+        raise RuntimeError(f"No zeroframes found in ramps for {target}/{segment}/{detector}")
+
+    cube = np.ascontiguousarray(np.stack(zf_list, axis=0), dtype=np.float32)
+    times = np.array(time_list, dtype=np.float64)
+
+    if sci_header is not None:
+        hdr = _make_3d_header(sci_header, *cube.shape)
+    else:
+        hdr = fits.Header()
+    hdr["TARGET"] = target
+    hdr["SEGMENT"] = segment
+    hdr["DETECTOR"] = detector
+    hdr["CUBETYPE"] = "ZEROFRAME"
+
+    primary = fits.PrimaryHDU(data=cube, header=hdr)
+    col = fits.Column(name="MID_BARY_MJD", format="D", unit="d", array=times)
+    time_hdu = fits.BinTableHDU.from_columns([col], name="DIFF_TIMES")
+    fits.HDUList([primary, time_hdu]).writeto(outname, overwrite=True)
+    print(f"[zeroframe] wrote {outname} ({cube.shape[0]} frames)")
     return outname

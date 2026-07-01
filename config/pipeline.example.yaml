@@ -1,7 +1,8 @@
 # ============================================================================
 # gc-variables-pipeline configuration (TEMPLATE)
 # Copy to config/pipeline.yaml and edit the `paths` and `crds` sections.
-# Every path the pipeline uses comes from here — there are NO hardcoded paths.
+# Every path the pipeline uses comes from here — there are NO hardcoded paths
+# in pipeline/ or scripts/.
 # ============================================================================
 
 version: "1.0"
@@ -15,24 +16,24 @@ crds:
 # --- Where data lives (EDIT THESE) ------------------------------------------
 paths:
   data_root: ./data/jwst           # uncal / ramp / calints per target/segment
-  refs_dir:  ./data/refs           # group-diff cubes, autocorr + WCS references
+  refs_dir:  ./data/refs           # group-diff + zeroframe cubes, autocorr refs
   astrometry_dir: ./data/astrometry  # LW-aligned WCS (LW->Gaia, SW->LW)
   extraction_dir: ./data/extraction
   catalogs_dir:   ./data/catalogs
   diagnostics_dir: ./data/diagnostics
-  logs_dir: ./logs
   psf_f200w: ./data/psf/PSF_NIRCam_in_flight_opd_filter_F200W.fits
   psf_f356w: ./data/psf/PSF_NIRCam_in_flight_opd_filter_F356W.fits
 
 # --- Targets / observing setup ----------------------------------------------
 # program: JWST GO-5381, NIRCam Module B, BRIGHT2, 10 groups/int.
+# (center_ra/center_dec are informational; downloads select by MAST obs-ID.)
 targets:
   Liller1:
     segments: [Segment3, Segment4]
     center_ra: 263.337
     center_dec: -33.398
   Terzan5:
-    segments: [Segment2]           # Segment1 is dithered; second-epoch only
+    segments: [Segment2]           # Segment1 is dithered; add it here to fetch the second epoch
     center_ra: 267.020
     center_dec: -24.779
 detectors_sw: [nrcb1, nrcb2, nrcb3, nrcb4]   # F200W
@@ -40,41 +41,54 @@ detector_lw: nrcblong                         # F356W
 
 # --- Detection --------------------------------------------------------------
 detection:
-  method: autocorr        # lag-1 temporal autocorrelation reference image
-  ramp_sigma: 3.0         # PSF-matched filter threshold (ramp)
-  zf_sigma: 5.0           # PSF-matched filter threshold (zeroframe)
+  ramp_sigma: 3.0         # PSF-matched filter threshold on the calints autocorr
+  zf_sigma: 5.0           # PSF-matched filter threshold on the ZF autocorr
   psf_kernel_size: 21
   min_separation: 1
-  crossmatch_radius: 0.1  # arcsec
 
 # --- Photometry -------------------------------------------------------------
+# Extraction aperture: whole-pixel circular mask (center distance <= r), no
+# background annulus; pixels NaN in any frame are excluded so the effective
+# aperture is constant in time (see pipeline/photometry.py).
 photometry:
-  aperture_radius: 1.5    # pixels, circular, no background annulus
-  use_annulus: false
+  aperture_radius: 1.5    # pixels
 
 # --- IQR clipping -----------------------------------------------------------
 clipping:
   ramp: {chunk_size: 18, iqr_factor: 2.0, min_points: 500}
   zf:   {chunk_size: 4,  iqr_factor: 2.0, min_points: 30}
 
+# --- Saturation handling at extraction ---------------------------------------
+# Saturating sources (last-in-ramp group-diff mean departs from first-in-ramp
+# by > sat_thresh sigma) skip IQR clipping; instead the first `first_groups`
+# group-diffs of each ramp are averaged (one point per integration).
+saturation:
+  sat_thresh: 10.0
+  first_groups: 2
+  min_points: 50
+
+# --- Binning ------------------------------------------------------------------
+binning:
+  ramp: 9                 # group-diffs per integration (10 groups -> 9 diffs)
+  zf: 4
+
 # --- Lightcurve correction --------------------------------------------------
 correction:
   improvement_gate: 0.10  # require >=10% integration-scatter improvement to apply
 
 # --- Period search ----------------------------------------------------------
-# Periods from 20 min to 12 hr (paper §3.6): the 20-min floor avoids aliasing
-# against the ~3.2 min integration timescale and the saturation banding pattern.
+# The published periods come from this search (20 min - 12 hr; the 20-min floor
+# avoids aliasing against the ~3.2 min integration timescale). BLS durations are
+# geomspaced from duration_min_min up to 0.95x the minimum trial period;
+# BLS significance is the SDE, (peak-mean)/std. 720 min = "no period" sentinel.
 period_search:
-  lomb_scargle: {freq_min_cph: 0.0833, freq_max_cph: 3.0, n_points: 5000}   # 12 hr .. 20 min
-  bls: {period_min_hr: 0.333, period_max_hr: 12.0, duration_min_min: 1.0, duration_max_min: 19.0}
-  period_sentinel_min: 720   # "no period detected" sentinel
+  lomb_scargle: {freq_min_cph: 0.083333, freq_max_cph: 3.0, n_points: 5000}   # 12 hr .. 20 min
+  bls: {period_min_hr: 0.3333, period_max_hr: 12.0, duration_min_min: 1.0,
+        n_periods: 1000, n_durations: 30}
+  zf: {freq_min_cph: 0.083333, freq_max_cph: 3.0, n_points: 5000}
 
 # --- Catalog build ----------------------------------------------------------
 catalog:
-  dedup_radius_arcsec: 0.2
-  friends_of_friends_radius_arcsec: 1.0
-  vetting_labels: ./data/vetting_labels   # shipped REAL/FAKE labels (from Zenodo)
-
-# --- Processing -------------------------------------------------------------
-processing:
-  n_workers: null         # null => cpu_count - 1
+  dedup_radius_arcsec: 0.2          # automatic fallback dedup (build_mapping)
+  vetting_labels: ./data/vetting_labels.csv   # shipped REAL labels (Zenodo)
+  dedup_groups: ./data/dedup_groups.csv       # shipped manual dedup decisions (Zenodo)
