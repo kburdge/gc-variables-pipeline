@@ -51,6 +51,11 @@ def main():
     cfg = load_config(args.config)
     from astroquery.mast import Observations
 
+    if not args.target and not args.all and not args.list:
+        ap.error("downloading every target/segment is TB-scale; pass --all to "
+                 "confirm, or select a --target (optionally --segment/--detector); "
+                 "use --list to preview")
+
     targets = [args.target] if args.target else list(cfg["targets"].keys())
     jobs = []
     for tgt in targets:

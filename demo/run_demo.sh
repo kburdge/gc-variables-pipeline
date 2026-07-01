@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Demo: run the front-end on a single detector / single segment.
-# Downloads a small slice from MAST, calibrates it (pinned CRDS), and builds the
-# group-differenced cube. Detection/extraction/plotting are the next stages
-# being ported (see ROADMAP.md) and will be appended here.
+# Demo: run the pipeline end-to-end on a single detector / single segment.
+# Downloads a small slice from MAST, calibrates it (pinned CRDS), builds the
+# group-differenced cube, detects variables, extracts light curves, and plots
+# the most significant one.
 #
 # Runs from raw MAST data; expect the calibration step to dominate the runtime.
 #
@@ -17,11 +17,11 @@ DEMO_TARGET=Terzan5
 DEMO_SEGMENT=Segment2
 DEMO_DETECTOR=nrcb4
 
-echo ">> [0/2] download demo slice from MAST ($DEMO_TARGET $DEMO_SEGMENT $DEMO_DETECTOR)"
+echo ">> [0/4] download demo slice from MAST ($DEMO_TARGET $DEMO_SEGMENT $DEMO_DETECTOR)"
 $PY "$ROOT/scripts/00_download_mast.py" --config "$CONFIG" \
     --target "$DEMO_TARGET" --segment "$DEMO_SEGMENT" --detector "$DEMO_DETECTOR" --product uncal
 
-echo ">> [1/2] calibrate (calwebb_detector1 + Image2, pinned CRDS)"
+echo ">> [1/4] calibrate (calwebb_detector1 + Image2, pinned CRDS)"
 $PY "$ROOT/scripts/01_calibrate.py" --config "$CONFIG" \
     --target "$DEMO_TARGET" --segment "$DEMO_SEGMENT" --detector "$DEMO_DETECTOR"
 
