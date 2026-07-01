@@ -56,11 +56,15 @@ def run_image2(rateints_files, output_dir):
     return sorted(glob.glob(os.path.join(str(output_dir), "*_calints.fits")))
 
 
-def calibrate(uncal_dir, output_dir, max_cores: str = "1"):
-    """Full stage 1: detector1 (-> ramp + rateints) then image2 (-> calints)."""
-    uncal = sorted(glob.glob(os.path.join(str(uncal_dir), "*_uncal.fits")))
+def calibrate(uncal_dir, output_dir, max_cores: str = "1", detector: str | None = None):
+    """Full stage 1: detector1 (-> ramp + rateints) then image2 (-> calints).
+
+    detector: restrict to one detector's uncal files (e.g. "nrcb4"); default all.
+    """
+    pattern = f"*_{detector}_uncal.fits" if detector else "*_uncal.fits"
+    uncal = sorted(glob.glob(os.path.join(str(uncal_dir), pattern)))
     if not uncal:
-        raise FileNotFoundError(f"No *_uncal.fits in {uncal_dir}")
+        raise FileNotFoundError(f"No {pattern} in {uncal_dir}")
     rateints = run_detector1(uncal, output_dir, max_cores=max_cores)
     calints = run_image2(rateints, os.path.join(str(output_dir), "calints"))
     print(f"[calibrate] {len(uncal)} uncal -> {len(rateints)} rateints, {len(calints)} calints")

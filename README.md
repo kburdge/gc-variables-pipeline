@@ -34,7 +34,7 @@ reproduces the published catalog from shipped human-vetting labels.
 
 | Path | Data volume | Who it's for |
 |------|-------------|--------------|
-| **Demo** (`demo/`) | ~minutes from MAST, one detector × one segment | Anyone — runs on a workstation, end-to-end to a recovered variable's light curve |
+| **Demo** (`demo/`) | one detector × one segment from MAST (calibration dominates the runtime) | Anyone — runs on a workstation, end-to-end to a recovered variable's light curve |
 | **Full reproduction** ([`docs/full_reproduction.md`](docs/full_reproduction.md)) | TB-scale download, multi-day compute | Reproducing the complete published catalog |
 
 To reproduce the **published catalog** without re-running the heavy calibration,
@@ -56,10 +56,10 @@ binary), confirming the toolchain works end to end.
 
 ## Reproducibility notes
 
-- **CRDS context is pinned** in `environment.yml` / `config/pipeline.example.yaml`.
+- **Calibration is pinned**: `jwst==1.17.1` in `environment.yml`, and `CRDS_CONTEXT=jwst_1322.pmap` set on `conda activate` and enforced by the scripts.
   JWST calibration is only deterministic if everyone uses the same reference
   files — set `CRDS_CONTEXT` to the value recorded in the paper.
-- **No hardcoded paths.** All paths come from `config/pipeline.yaml`.
+- **No hardcoded paths** in `pipeline/` or `scripts/` — all paths come from `config/pipeline.yaml`. (`unported/` holds archival production scripts with the author's paths; see its README.)
 - **The catalog is reproducible** from the shipped vetting labels; the original
   REAL/FAKE classification was manual visual inspection (paper §3.8).
 

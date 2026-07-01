@@ -25,7 +25,7 @@ def main():
     ap.add_argument("--config", default="config/pipeline.yaml")
     ap.add_argument("--target", required=True)
     ap.add_argument("--segment", required=True)
-    ap.add_argument("--detector", help="(informational; detector1 runs on all uncal in the dir)")
+    ap.add_argument("--detector", help="restrict to one detector's uncal files (default: all in the dir)")
     ap.add_argument("--max-cores", default="1")
     args = ap.parse_args()
 
@@ -37,7 +37,7 @@ def main():
 
     uncal_dir = os.path.join(cfg["paths"]["data_root"], args.target, args.segment)
     out_dir = os.path.join(uncal_dir, "detector1_output")
-    calibrate(uncal_dir, out_dir, max_cores=args.max_cores)
+    calibrate(uncal_dir, out_dir, max_cores=args.max_cores, detector=args.detector)
 
 
 if __name__ == "__main__":

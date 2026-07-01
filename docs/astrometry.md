@@ -31,20 +31,22 @@ Two-stage absolute astrometry pipeline tying NIRCam positions to the Gaia DR3 re
 - 289-631 references per detector, 2.5-6 mas median residuals
 - Median shift applied as CRVAL correction
 
-### Usage
+### Reference implementation (archival — not runnable from this repo)
+
+The astrometry chain has not been ported to the config-driven `pipeline/`
+package; the production scripts are preserved verbatim in [`unported/`](../unported)
+as a method record (they contain the author's hardcoded paths). The WCS
+*products* they produced (`{target}_{seg}_{det}_wcs_lw.fits` /
+`_wcs_gaia.fits`) are shipped on Zenodo — place them in
+`paths.astrometry_dir` and the catalog stage uses them directly.
+
+For reference, the original invocation was:
 
 ```bash
-# Full pipeline (both targets)
-bash analysis/run_astrometry_pipeline.sh
-
-# Individual targets
-python analysis/calibrate_lw_astrometry.py --target Terzan5
-python analysis/calibrate_lw_astrometry.py --target Liller1
-python analysis/calibrate_sw_astrometry_lw.py --target Terzan5
-python analysis/calibrate_sw_astrometry_lw.py --target Liller1
-
-# Build TOPCAT match table for inspection
-python analysis/build_lw_match_table.py --target Terzan5 --seg Segment2
+bash unported/run_astrometry_pipeline.sh        # full chain, both targets
+python unported/calibrate_lw_astrometry.py --target Terzan5    # stage 1 (LW -> Gaia)
+python unported/calibrate_sw_astrometry_lw.py --target Terzan5 # stage 2 (SW -> LW)
+python unported/build_lw_match_table.py --target Terzan5 --seg Segment2  # TOPCAT table
 ```
 
 ### Systematic Error Budget
