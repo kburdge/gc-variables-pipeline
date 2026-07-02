@@ -137,8 +137,10 @@ def create_zeroframe_cube(cfg, target, segment, detector, overwrite=False):
 
     Ported from build_zeroframe_cube + the cube save in
     process_detector_zeroframes (ramp_pipeline.py). Inherited quirk kept for
-    bit-compatibility: the time column is named MID_BARY_MJD but holds
-    int_mid_MJD_UTC (UTC, not barycentric).
+    The time column (MID_BARY_MJD) holds the zeroframe mid-exposure
+    (reset + tf/2) on the same barycentric timebase as the group-diff cubes.
+    NOTE: cubes/catalogs built before 2026-07-02 held UTC integration
+    midpoints here instead (~5-7 min early relative to the ramp timebase).
     """
     refs_dir = cfg["paths"]["refs_dir"]
     Path(refs_dir).mkdir(parents=True, exist_ok=True)
@@ -163,7 +165,19 @@ def create_zeroframe_cube(cfg, target, segment, detector, overwrite=False):
                 print(f"[zeroframe] warning: no ZEROFRAME in {fn}")
                 continue
             zf = hdul["ZEROFRAME"].data.astype(np.float32)
-            tmid = hdul["INT_TIMES"].data["int_mid_MJD_UTC"]
+            # Zeroframe mid-exposure (~tf/2 = 5.4 s after reset), barycentric,
+            # consistent with the group-diff timebase: bary_end(g1) = reset+2tf
+            # so zf_mid = bary_end(g1) - 1.5 tf. (The pre-2026-07 catalogs used
+            # INT_TIMES int_mid_MJD_UTC here: UTC integration midpoints, ~5-7
+            # min off the ramp timebase.)
+            gt = hdul["GROUP"].data
+            tmid = []
+            for intno in np.unique(gt["integration_number"]):
+                gi = gt[gt["integration_number"] == intno]
+                gi = gi[np.argsort(gi["group_number"])]
+                e1, e2 = float(gi["bary_end_time"][0]), float(gi["bary_end_time"][1])
+                tmid.append(e1 - 0.75 * (e2 - e1))
+            tmid = np.asarray(tmid)
             if sci_header is None and "SCI" in hdul:
                 sci_header = hdul["SCI"].header.copy()
         for i in range(1, zf.shape[0]):   # drop first zero frame per exposure
