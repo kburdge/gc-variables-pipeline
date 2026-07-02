@@ -259,6 +259,10 @@ def calibrate_lw_gaia(cfg, target, seg, obs_epoch_mjd, out_dir=None, write_wcs=T
         Table(rows_pre_c).write(
             os.path.join(out_dir, f"{target}_{seg}_{det}_gaia_match_final.fits"),
             overwrite=True)
+        # post-alignment matches: the input for the paper's residual/cutout figures
+        Table(rows_post_c).write(
+            os.path.join(out_dir, f"{target}_{seg}_{det}_gaia_match_post.fits"),
+            overwrite=True)
 
     return {
         "target": target, "seg": seg,
