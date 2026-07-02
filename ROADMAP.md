@@ -72,7 +72,10 @@ porting work here.
 ### Data products (Zenodo)
 - ⬜ Final `master_variable_catalog.h5`
 - ⬜ Label products: `vetting_labels.csv` + `dedup_groups.csv` (export tools done)
-- ⬜ WCS products (`*_wcs_lw.fits` / `*_wcs_gaia.fits`) — required by stage 5; astrometry chain itself stays archival in `unported/`
+- ⬜ WCS products (`*_wcs_lw.fits` / `*_wcs_gaia.fits`) + Gaia DR3 caches (`gaia_*.vot`) + uncal ZF medians — stage-5 and astrometry inputs
+- ✅ LW→Gaia astrometry PORTED (`pipeline/astrometry.py`, `scripts/06_astrometry_lw_gaia.py`);
+      **validated bit-exact** vs the shipped WCS (0.000 mas CRVAL, N=97/46/45)
+- ⬜ SW→LW transfer port (`calibrate_sw_astrometry_lw.py`) — last unported stage
 - ⬜ Demo-subset cubes (so the demo can skip the heavy calibration if desired)
 - ⬜ Mint DOI; fill into CITATION.cff, README, and the paper appendix
 - ⬜ PSF models (F200W/F356W WebbPSF in-flight OPD) — small; consider committing to the repo instead
