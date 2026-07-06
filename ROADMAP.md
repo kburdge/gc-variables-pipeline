@@ -58,8 +58,9 @@ porting work here.
       **validated on Terzan 5: best-stage 116/116 agreement; sat_corrected median corr = 1.000**
 - ⬜ Port `add_special_reduction` (PSF-wing annulus extraction, e.g. Rapid Burster);
       key by RA/Dec → master_id, not a hardcoded ID
-- ⬜ Segment 1 dithered stitching (port add_segment1_terzan5.py: per-group ratio sat corr →
-      slope → per-block slope-aware stitching → exposure rejection → bkg rescale)
+- ⬜ Segment 1 dithered stitching (port add_segment1_terzan5.py; NOTE the figure-of-record
+      generator is paper_seg1_stages.py — similar but distinct chain; paper's repro
+      appendix/flowchart now state honestly that Seg1 ships as data products, unported)
 - ⬜ Full Liller 1 run (heavier: 4 segments) + web-viewer port (incl. `build_real_catalog`)
 - ⬜ Determinism check: rebuild with `--dedup dedup_groups.csv` == published catalog
       (source list + master_ids now guaranteed; verify lightcurves/corrections end-to-end)
@@ -97,3 +98,11 @@ porting work here.
   today would take the ZF detection threshold from `autocorr_sigma` (3σ) rather than
   `zf_sigma`; the published run used 5σ (empirically verified — the port uses
   `detection.zf_sigma` explicitly).
+
+### Timing (2026-07-02 overhaul, synced with production)
+- ✅ groupdiff.py + corrections.py stamp flux-weighted mid-exposure (BMJD_TDB):
+      diff k = reset+(2k+0.5)tf; zeroframe = reset+tf/2 from the GROUP table.
+      Pre-existing cubes/catalogs were surgically shifted; regeneration reproduces
+      the shipped DIFF_TIMES to <1 ms (not bit-identical — tf derived per file).
+- ⚠ Catalog `/time_reference` table (per-segment t0 for corrected-stage hour arrays)
+      is created by the production surgery, not yet by the port's catalog build.
