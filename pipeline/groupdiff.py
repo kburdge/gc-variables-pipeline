@@ -4,7 +4,8 @@ Differences consecutive non-destructive readout groups within each integration
 ramp to synthesize a high-cadence image cube: for 10 groups/integration this
 yields 9 group-differences per integration at the ~21.47 s group time, i.e.
 972 frames per ~7 hr visit. Statically bad pixels (PIXELDQ != 0) are masked to
-NaN. Per-frame timestamps are barycentric (TDB) flux-weighted mid-exposures,
+NaN. Per-frame timestamps are barycentric (TDB) mid-exposures (temporal
+midpoint of each sample's collection interval, not flux-weighted),
 read from the ramp file's GROUP table.
 
 Note on GROUPDQ: the mask below keeps the original's ``dq > 10`` threshold,
@@ -107,7 +108,7 @@ def create_groupdiff_cube(cfg, target, segment, detector, overwrite=False):
                 order_g = np.argsort(this_int["group_number"])
                 bary_end = this_int["bary_end_time"][order_g]
                 for k in range(n_grp - 1):
-                    # flux-weighted mid-exposure: group k is the average of two
+                    # mid-exposure: group k is the average of two
                     # frames (equivalent sample at its mean frame time), so the
                     # diff's mid-time is the group-END midpoint minus t_frame/2.
                     tf_half = 0.25 * (bary_end[1] - bary_end[0])

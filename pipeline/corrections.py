@@ -237,7 +237,7 @@ def sat_correct_det(data_root, target, seg, det, sources_on_det, ap_mask):
         pix_info[(py, px)] = {"max_g": max_g, "rm": rm, "g0v": g0_clean, "all_gds": all_gds}
 
     n_slots = nint * max_gd
-    time_grid = np.array([t0s[ii] + (g + 1.25) * TGROUP_HR  # flux-weighted mid-exposure of diff g
+    time_grid = np.array([t0s[ii] + (g + 1.25) * TGROUP_HR  # mid-exposure of diff g
                           for ii in range(nint) for g in range(max_gd)])
 
     results = {}
