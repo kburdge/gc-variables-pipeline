@@ -363,16 +363,8 @@ def build_catalog(by_target):
                 if os.path.exists(zf_path):
                     zf_autocorr[(target, seg, det)] = fits.getdata(zf_path)
 
-    # Load LW-aligned WCS (used for cross-detector/cross-segment pixel
-    # projection during extraction — only relative consistency matters here).
+    # Load LW-aligned WCS (for cross-detector projection, dedup, and final RA/Dec)
     lw_wcs = {}
-    # 2026-07-12 GAIA FIX: separate fully Gaia-tied per-detector solution used
-    # for the FINAL stored source RA/Dec. wcs_lw sits on the intermediate LW
-    # frame and, for SW detectors (nrcb1-4), is MISSING the SW->LW transfer that
-    # only wcs_gaia carries (off median ~37 mas, up to 260 mas L1 nrcb4). Keep
-    # lw_wcs for internal pixel projection, but emit RA/Dec through gaia_wcs.
-    # See diagnostics/astrometry_audit/AUDIT.md.
-    gaia_wcs = {}
     for target, segs in TARGETS.items():
         for seg in segs:
             for det in ALL_DETS:
@@ -384,9 +376,6 @@ def build_catalog(by_target):
                     path2 = f'{ASTROM_DIR}/{target}_{seg}_{det}_wcs_gaia.fits'
                     if os.path.exists(path2):
                         lw_wcs[(target, seg, det)] = WCS(fits.getheader(path2))
-                gaia_path = f'{ASTROM_DIR}/{target}_{seg}_{det}_wcs_gaia.fits'
-                if os.path.exists(gaia_path):
-                    gaia_wcs[(target, seg, det)] = WCS(fits.getheader(gaia_path))
 
     first_target = True
     for target, src_list in by_target.items():
@@ -505,17 +494,11 @@ def build_catalog(by_target):
                 src_arr[i]['refined_py'] = py
                 n_failed += 1
 
-            # Final RA/Dec from refined pixel via the Gaia-tied WCS.
-            # 2026-07-12 GAIA FIX: use gaia_wcs (not lw_wcs) so SW detectors
-            # carry the SW->LW transfer. See diagnostics/astrometry_audit/AUDIT.md.
+            # Final RA/Dec from refined pixel via LW-aligned WCS
             wcs_key = (target, seg, det)
             use_px = float(src_arr[i]['refined_px'])
             use_py = float(src_arr[i]['refined_py'])
-            if wcs_key in gaia_wcs:
-                sky = gaia_wcs[wcs_key].pixel_to_world(use_px, use_py)
-                src_arr[i]['ra'] = float(sky.ra.deg)
-                src_arr[i]['dec'] = float(sky.dec.deg)
-            elif wcs_key in lw_wcs:
+            if wcs_key in lw_wcs:
                 sky = lw_wcs[wcs_key].pixel_to_world(use_px, use_py)
                 src_arr[i]['ra'] = float(sky.ra.deg)
                 src_arr[i]['dec'] = float(sky.dec.deg)
