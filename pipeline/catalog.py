@@ -31,7 +31,11 @@ import os
 import numpy as np
 import h5py
 from astropy.coordinates import SkyCoord
+from astropy.io import fits
+from astropy.wcs import WCS
 import astropy.units as u
+
+from .photometry import clip_outliers_iqr
 
 # compound dtype of the published catalog's {target}/sources table
 SOURCE_DTYPE = np.dtype([
@@ -308,9 +312,6 @@ def _aperture_mask(ap_radius=1.5):
 
 def _load_wcs(astrom_dir, target, segments, detectors):
     """LW-aligned WCS per (target,seg,det): prefer *_wcs_lw.fits, else *_wcs_gaia.fits."""
-    import os
-    from astropy.io import fits
-    from astropy.wcs import WCS
     out = {}
     for seg in segments:
         for det in detectors:
@@ -324,8 +325,6 @@ def _load_wcs(astrom_dir, target, segments, detectors):
 
 def _load_autocorr(refs_dir, target, segments, detectors):
     """Ramp + ZF autocorr reference images per (target,seg,det)."""
-    import os
-    from astropy.io import fits
     ac, zf = {}, {}
     for seg in segments:
         for det in detectors:
@@ -381,9 +380,6 @@ def populate_lightcurves(cfg, master, out_h5, targets=("Liller1", "Terzan5")):
     Ported from rebuild_master_catalog_v2.py. Requires the group-diff/ZF cubes
     (refs_dir), autocorr references (refs_dir) and LW-aligned WCS (astrometry dir).
     """
-    import os
-    from astropy.io import fits
-    from .photometry import clip_outliers_iqr
 
     refs = cfg["paths"]["refs_dir"]
     astrom = cfg["paths"].get("astrometry_dir", os.path.join(os.path.dirname(refs), "astrometry"))

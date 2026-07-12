@@ -9,6 +9,13 @@ logs/
 *.fits.gz
 crds_cache/
 
+# Production working tree (this clone shares a directory with the machine's
+# production pipeline; these dirs are the real science code and must never be
+# committed into the public package — pipeline/ + scripts/ are the ported ones)
+/core/
+/analysis/
+/preprocessing/
+
 # Python
 __pycache__/
 *.pyc

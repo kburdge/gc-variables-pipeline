@@ -38,6 +38,7 @@ STAGE_NAMES = ("groupdiff", "sat_corrected", "slope_corrected", "sat_slope")
 
 
 def _aperture_mask(ap_radius=1.5):
+    """Exact circular-aperture weight mask on the (2H+1) cutout grid."""
     from photutils.aperture import CircularAperture
     ap = CircularAperture([(H, H)], r=ap_radius)
     return ap.to_mask(method="exact")[0].to_image((2 * H + 1, 2 * H + 1)).astype(np.float32)
