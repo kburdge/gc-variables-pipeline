@@ -22,6 +22,7 @@ they are written once and memory-mapped by downstream stages.
 from __future__ import annotations
 
 import glob
+import re
 import os
 from pathlib import Path
 
@@ -48,6 +49,47 @@ def _make_3d_header(sci_header, nframes, ny, nx):
     hdr["NAXIS1"] = nx
     hdr["NAXIS2"] = ny
     hdr["NAXIS3"] = nframes
+    return hdr
+
+
+_WCS_CARD = re.compile(
+    r"^(WCSAXES|CRPIX[12]|CRVAL[12]|CDELT[12]|CUNIT[12]|CTYPE[12]|"
+    r"CD[12]_[12]|PC[12]_[12]|LONPOLE|LATPOLE|RADESYS|EQUINOX|"
+    r"A_ORDER|B_ORDER|AP_ORDER|BP_ORDER|A_\d+_\d+|B_\d+_\d+|"
+    r"AP_\d+_\d+|BP_\d+_\d+|A_DMAX|B_DMAX|WCSNAME)$"
+)
+
+
+def _inject_calibrated_wcs(hdr, cfg, target, segment, detector):
+    """Replace the raw pipeline WCS with the calibrated Gaia-tied solution.
+
+    Solutions live in paths.astrometry_dir: SW detectors (nrcb1-4) use
+    *_wcs_lw.fits (SW registered onto the Gaia-anchored LW frame; validates to
+    ~3-9 mas against Gaia DR3), the LW detector (nrcblong) uses *_wcs_gaia.fits
+    (direct LW->Gaia fit, ~3 mas). Run/obtain the astrometry solutions BEFORE
+    building cubes so every downstream product carries the good WCS from the
+    start; if no solution is found the raw (uncalibrated, ~50-200 mas) pointing
+    WCS is kept and a warning is printed.
+    """
+    tag = "wcs_gaia" if detector == "nrcblong" else "wcs_lw"
+    sol_path = os.path.join(
+        str(cfg["paths"].get("astrometry_dir", "")),
+        f"{target}_{segment}_{detector}_{tag}.fits",
+    )
+    if not os.path.exists(sol_path):
+        print(f"[groupdiff] WARNING: no astrometry solution {sol_path}; "
+              "cube keeps the RAW pointing WCS (~0.05-0.2 arcsec off Gaia). "
+              "Run the astrometry stage first for calibrated coordinates.")
+        return hdr
+    for key in list(hdr.keys()):
+        if key and _WCS_CARD.match(key):
+            del hdr[key]
+    sol = fits.getheader(sol_path)
+    for card in sol.cards:
+        if card.keyword and _WCS_CARD.match(card.keyword):
+            hdr.append(card)
+    hdr["WCSORIG"] = (tag, "Gaia-tied WCS injected at cube creation")
+    print(f"[groupdiff] injected calibrated WCS ({tag}) from {os.path.basename(sol_path)}")
     return hdr
 
 
@@ -119,6 +161,7 @@ def create_groupdiff_cube(cfg, target, segment, detector, overwrite=False):
     times = np.array(diff_times, dtype=np.float64)
 
     hdr = _make_3d_header(sci_header, *cube.shape)
+    hdr = _inject_calibrated_wcs(hdr, cfg, target, segment, detector)
     hdr["TARGET"] = target
     hdr["SEGMENT"] = segment
     hdr["DETECTOR"] = detector
@@ -198,6 +241,7 @@ def create_zeroframe_cube(cfg, target, segment, detector, overwrite=False):
         hdr = _make_3d_header(sci_header, *cube.shape)
     else:
         hdr = fits.Header()
+    hdr = _inject_calibrated_wcs(hdr, cfg, target, segment, detector)
     hdr["TARGET"] = target
     hdr["SEGMENT"] = segment
     hdr["DETECTOR"] = detector

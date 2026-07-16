@@ -22,6 +22,10 @@
   │   group-diffs      │  → pipeline/groupdiff.py                   │
   │   + zeroframes     │  → 972 frames @ 21.47 s, 16 GB/detector    │
   │                    │  → 96-frame zeroframe cube                 │
+  │                    │  cube headers get the calibrated Gaia-tied │
+  │                    │  WCS (astrometry_dir: SW=wcs_lw,           │
+  │                    │  LW=wcs_gaia) — provide/solve astrometry   │
+  │                    │  BEFORE this step, else raw WCS + warning  │
   └─────────┬─────────┘                                            │
             ▼                                                       │
   ┌───────────────────┐    ┌──────────────────────────┐            │
