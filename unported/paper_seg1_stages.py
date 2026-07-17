@@ -88,57 +88,11 @@ def correct_integration_slopes_raw(t, f):
     return f_corr
 
 
-def slope_stitch(blocks):
-    valid_blocks = [b for b in blocks if b is not None]
-    if not valid_blocks:
-        return None
-    offsets = np.zeros(len(blocks))
-    models = []
-    for b in blocks:
-        if b is None:
-            models.append(None)
-            continue
-        if len(b[0]) < 10:
-            models.append(None)
-            continue
-        p = np.polyfit(b[0], b[1], 1)
-        models.append({
-            'slope': p[0],
-            'val_end': np.polyval(p, b[0][-1]),
-            'val_start': np.polyval(p, b[0][0]),
-            't_end': b[0][-1],
-            't_start': b[0][0],
-        })
-    for i in range(1, len(blocks)):
-        if blocks[i] is None or models[i] is None:
-            continue
-        prev = None
-        for j in range(i-1, -1, -1):
-            if blocks[j] is not None and models[j] is not None:
-                prev = j
-                break
-        if prev is None:
-            continue
-        pm, cm = models[prev], models[i]
-        dt_gap = cm['t_start'] - pm['t_end']
-        avg_slope = (pm['slope'] + cm['slope']) / 2.0
-        expected_start = pm['val_end'] + offsets[prev] + avg_slope * dt_gap
-        offsets[i] = expected_start - cm['val_start']
-
-    all_t, all_f = [], []
-    for i, b in enumerate(blocks):
-        if b is None:
-            continue
-        all_t.append(b[0])
-        all_f.append(b[1] + offsets[i])
-    t_cat = np.concatenate(all_t)
-    f_cat = np.concatenate(all_f)
-    so = np.argsort(t_cat)
-    t_cat, f_cat = t_cat[so], f_cat[so]
-    global_med = np.median(f_cat)
-    if global_med <= 0:
-        return None
-    return t_cat, f_cat / global_med, global_med
+# The stitcher of record lives in the production script (same directory);
+# import it so this figure module can never drift from production
+# (replicate-by-importing rule). v3 (2026-07-16): quadratic per-block fits,
+# gap continuation from endpoint values + endpoint derivatives.
+from add_segment1_terzan5 import slope_stitch  # noqa: E402
 
 
 def apply_bkg_rescale(fn, med_raw, bkg_offset):
