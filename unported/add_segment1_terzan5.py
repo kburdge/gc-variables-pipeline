@@ -431,6 +431,7 @@ def main():
 
     # Collect results: mid -> {ch -> (t_hr, fn)}
     results = {}  # mid -> {'SW': (t, f, med), 'LW': (t, f, med)}
+    bkg_scalars = {}  # (mid, ch) -> (med_raw, bkg_offset), recorded not applied
 
     for mid in source_mids:
         mid = int(mid)
@@ -510,20 +511,31 @@ def main():
             if len(fn_c) < 20:
                 continue
 
-            # Background rescale
+            # Background: MEASURED but NOT applied (2026-07-22). We serve raw
+            # aperture photometry and let lightcurve models carry dilution as a
+            # free third-light term bounded by dilution > 0; subtracting an
+            # annulus estimate can over- OR under-correct the blend. The
+            # scalars are recorded for anyone who wants to impose a prior.
             bkg_off = bkg_data.get(mid, {}).get(det, 0.0)
-            fn_c = apply_bkg_rescale(fn_c, med_raw, bkg_off)
 
             # This is the "groupdiff" (corrected+stitched) baseline
             sc_gd = integration_scatter(t_c, fn_c)
             stages = {'groupdiff': (t_c, fn_c, sc_gd)}
+            # NOTE: `med_raw` here is ~1.0 -- each dither block is normalized to
+            # its own median before stitching, so the DN scale is gone by this
+            # point (this is also why apply_bkg_rescale was always a silent
+            # no-op for Segment 1: med_raw - bkg < 0). For the supplementary
+            # dilution scalars we therefore record the median of the per-block
+            # RAW aperture medians, which is on the same DN scale as bkg_off.
+            _raw_meds = [m for m in block_raw_meds if m is not None and m > 0]
+            if _raw_meds:
+                bkg_scalars[(mid, ch)] = (float(np.median(_raw_meds)), float(bkg_off))
 
             # Second-pass slope correction on the stitched LC
             f_sl = apply_slope_correction(t_c, fn_c)
             if f_sl is not None:
                 f_sl_c, t_sl_c = clip_iqr(f_sl, t_c)
                 f_sl_c, t_sl_c = clip_iqr(f_sl_c, t_sl_c)
-                f_sl_c = apply_bkg_rescale(f_sl_c, med_raw, bkg_off)
                 sc_sl = integration_scatter(t_sl_c, f_sl_c)
                 if sc_sl < GATE_THRESH * sc_gd:
                     stages['slope_corrected'] = (t_sl_c, f_sl_c, sc_sl)
@@ -576,6 +588,35 @@ def main():
                 sg.attrs['scatter'] = float(sc_s)
                 sg.attrs['mjd_ref'] = float(t0_mjd)
                 n_written[stage_name] = n_written.get(stage_name, 0) + 1
+
+    # Record the Segment-1 background scalars in background_level (measured,
+    # NOT applied to the flux -- see the note at the groupdiff stage).
+    blp = 'background_level/Terzan5'
+    if blp in h5 and bkg_scalars:
+        bl = h5[blp][:]
+        names = bl.dtype.names
+        n_set = 0
+        for i, row in enumerate(bl):
+            mid_i = int(row['master_id'])
+            for ch in ('SW', 'LW'):
+                sc = bkg_scalars.get((mid_i, ch))
+                if sc is None:
+                    continue
+                med_raw_v, bkg_v = sc
+                key = f'Segment1_{ch}'
+                if f'{key}_med_raw_dn' in names:
+                    bl[i][f'{key}_med_raw_dn'] = med_raw_v
+                    bl[i][f'{key}_bkg_dn'] = bkg_v
+                    bl[i][f'{key}_rescale'] = (med_raw_v / (med_raw_v - bkg_v)
+                                               if (med_raw_v - bkg_v) > 0 and bkg_v > 0
+                                               else 1.0)
+                    n_set += 1
+        attrs = dict(h5[blp].attrs)
+        del h5[blp]
+        d = h5.create_dataset(blp, data=bl)
+        for k, v in attrs.items():
+            d.attrs[k] = v
+        print(f'Recorded Segment1 background scalars for {n_set} source/channels')
 
     # Update best_stage table to include Segment1
     bs_old = h5['best_stage/Terzan5'][:]

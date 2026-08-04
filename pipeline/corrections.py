@@ -118,8 +118,19 @@ def measure_bkg_offset(cube, ix, iy, ch, ap_area):
     return float(np.nanmedian(per_frame)) * ap_area
 
 
-def apply_bkg_rescale(fn, med_raw, bkg_offset):
-    """Amplify fractional variability to remove dilution by static background light."""
+def apply_bkg_rescale(fn, med_raw, bkg_offset, apply=False):
+    """Amplitude rescale that would remove annulus-estimated blend dilution.
+
+    DISABLED BY DEFAULT (2026-07-22). The published catalog serves RAW aperture
+    photometry: an annulus background estimate can over- OR under-correct the
+    blend in a crowded core (the implied amplification reached ~800x for the
+    most diluted sources), so instead of baking a possibly-wrong correction
+    into the flux we keep the background as a supplementary scalar and let
+    lightcurve models carry dilution as a free third-light term bounded only by
+    dilution > 0. Pass apply=True to reproduce the pre-2026-07-22 behaviour.
+    """
+    if not apply:
+        return fn
     source_med = med_raw - bkg_offset
     if source_med <= 0 or bkg_offset <= 0:
         return fn
